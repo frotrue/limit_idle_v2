@@ -2,6 +2,7 @@
   <div id="app" class="app-wrapper">
     <div class="container">
 
+      <!-- [상단 헤더] 현재 진행도 및 f(x) 수식 표시 -->
       <header class="header-card">
         <div class="label">CURRENT PROGRESS</div>
         <h1 class="resource-display">{{ format(game.fv) }}</h1>
@@ -11,13 +12,17 @@
           <div class="progress-info">
             <span>X-Axis: {{ format(game.current_x) }} / {{ format(game.max_x) }}</span>
           </div>
-<!--          <div class="progress-container">-->
-<!--            <div class="progress-bar" :style="{ width: (game.current_x.div(game.max_x).toNumber() * 100) + '%' }"></div>-->
-<!--            <div class="progress-glow" :style="{ width: (game.current_x.div(game.max_x).toNumber() * 100) + '%' }"></div>-->
-<!--          </div>-->
+          <!-- 진행도 바 (필요 시 주석 해제) -->
+          <!--
+          <div class="progress-container">
+            <div class="progress-bar" :style="{ width: (game.current_x.div(game.max_x).toNumber() * 100) + '%' }"></div>
+            <div class="progress-glow" :style="{ width: (game.current_x.div(game.max_x).toNumber() * 100) + '%' }"></div>
+          </div>
+          -->
         </div>
       </header>
 
+      <!-- [네비게이션] 탭 메뉴 버튼 -->
       <nav class="tab-menu">
         <button v-for="tab in tabs" :key="tab.id"
                 :class="{ active: activeTab === tab.id }"
@@ -27,10 +32,13 @@
         </button>
       </nav>
 
+      <!-- [메인 콘텐츠 영역] 선택된 탭에 따라 내용 변경 -->
       <main class="main-content">
+        
+        <!-- 1. Variable 탭 (f(x) 관련 업그레이드) -->
         <div v-if="activeTab === 'fx'" class="tab-pane">
           <div class="section-title">Variable Upgrades</div>
-
+          <!-- x^n 계수 업그레이드 그리드 -->
           <div class="upgrade-grid">
             <button v-for="upg in game.x_upgrades"
                     :key="upg.id"
@@ -48,8 +56,11 @@
               <div class="upg-level">Lv.{{ upg.level }}</div>
             </button>
           </div>
+
           <br>
-          <div class="section-title">other Upgrades</div>
+          
+          <div class="section-title">Other Upgrades</div>
+          <!-- 기타 수치(max x, x increase) 업그레이드 그리드 -->
           <div class="upgrade-grid">
             <button v-for="upg in game.other_upgrades"
                     :key="upg.id"
@@ -68,20 +79,25 @@
             </button>
           </div>
         </div>
+
+        <!-- 2. Derivative 탭 (환생 및 미분 보상) -->
         <div v-if="activeTab === 'fdx'" class="tab-pane">
+          <!-- DX 포인트 표시부 -->
           <div class="dx-header-card">
             <div class="label">DERIVATIVE POINTS</div>
             <div class="dx-resource-display">{{ format(game.dx_points) }} DX</div>
           </div>
 
+          <!-- 미분(환생) 버튼 -->
           <div class="section-title">Differentiation</div>
           <div class="upgrade-grid">
-            <button class="upg-card-mini full-row prestige-btn" @click="console.log('Differentiate clicked')">
+            <button class="upg-card-mini full-row prestige-btn" @click="differentiate_bt">
               <div class="upg-name">Differentiate f(x)</div>
               <div class="upg-desc">Reset progress to gain DX points</div>
             </button>
           </div>
 
+          <!-- 미분 업그레이드 그리드 -->
           <div class="section-title">Derivative Upgrades</div>
           <div class="upgrade-grid">
             <button v-for="upg in game.dx_upgrades"
@@ -102,12 +118,14 @@
           </div>
         </div>
 
+        <!-- 3. Settings 탭 (저장 및 초기화) -->
         <div v-if="activeTab === 'settings'" class="tab-pane">
           <div class="settings-group">
             <button class="sub-btn" @click="saveGame">SAVE GAME</button>
             <button class="sub-btn danger" @click="resetGame">RESET DATA</button>
           </div>
         </div>
+
       </main>
     </div>
   </div>
@@ -214,6 +232,40 @@ const differentiate = (equation, x) => {
         return equation_calc(temp_arr, x);
     }
     return temp_arr;
+}
+const differentiate_bt = () => { //made by gemini 3.0 pro
+  if (game.fv.gte("1e10")) {
+    if (confirm("미분시 현재 모든 함수가 초기화되고 보상을 얻습니다. 진행하시겠습니까?")) {
+      // 보상 계산: fv가 1e10일 때 1 DX, 그 이후 10배마다 약 2배씩 증가 (로그 기반)
+      // 공식: 10 ^ (log10(fv) - 10) / 2
+      let gain = differentiate(game.fx, game.prestige_x);
+      game.dx_points = game.dx_points.plus(gain);
+
+      // 주요 진행도 초기화
+      game.fv = new Decimal(10);
+      game.fx = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      game.current_x = new Decimal(0);
+      game.max_x = new Decimal(1);
+      game.x_increase = new Decimal(0.05);
+
+      // 업그레이드 레벨 일괄 초기화 (비효율적인 개별 대입 방지)
+      Object.values(game.x_upgrades).forEach(upg => {
+        upg.level = 0;
+        // 만약 가격이 레벨에 따라 변한다면 여기서 가격도 초기화 로직을 넣을 수 있습니다.
+      });
+      
+      Object.values(game.other_upgrades).forEach(upg => {
+        upg.level = 0;
+      });
+
+      // UI 갱신
+      makefx();
+      
+      alert(`${format(gain)} DX 포인트를 획득했습니다!`);
+    }
+  } else {
+    alert("미분하려면 최소 1.00e10 FV가 필요합니다.");
+  }
 }
 
 const manualTick = () => {
