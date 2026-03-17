@@ -62,21 +62,22 @@
           <div class="section-title">Other Upgrades</div>
           <!-- 기타 수치(max x, x increase) 업그레이드 그리드 -->
           <div class="upgrade-grid">
-            <button v-for="upg in game.other_upgrades"
-                    :key="upg.id"
-                    class="upg-card-mini"
-                    :class="{
-                      'can-buy': game.fv.gte(upg.price),
-                      'locked': game.fv.lt(upg.price)
-                    }"
-                    @click="buyOtherUpgrade(upg)">
-              <div class="upg-name">{{ upg.name }}</div>
-              <div class="upg-cost">
-                <span class="cost-val">{{ format(upg.price) }}</span>
-                <span class="cost-unit">FV</span>
-              </div>
-              <div class="upg-level">Lv.{{ upg.level }}</div>
-            </button>
+            <template v-for="upg in game.other_upgrades" :key="upg.id">
+              <button v-if="upg.type === 'fx'"
+                      class="upg-card-mini"
+                      :class="{
+                        'can-buy': game.fv.gte(upg.price),
+                        'locked': game.fv.lt(upg.price)
+                      }"
+                      @click="buyOtherUpgrade(upg)">
+                <div class="upg-name">{{ upg.name }}</div>
+                <div class="upg-cost">
+                  <span class="cost-val">{{ format(upg.price) }}</span>
+                  <span class="cost-unit">FV</span>
+                </div>
+                <div class="upg-level">Lv.{{ upg.level }}</div>
+              </button>
+            </template>
           </div>
         </div>
 
@@ -100,25 +101,26 @@
           <!-- 미분 업그레이드 그리드 -->
           <div class="section-title">Derivative Upgrades</div>
           <div class="upgrade-grid">
-            <button v-for="upg in game.dx_upgrades"
-                    :key="upg.id"
-                    class="upg-card-mini"
-                    :class="{
-                      'can-buy': game.dx_points.gte(upg.price),
-                      'locked': game.dx_points.lt(upg.price)
-                    }"
-                    @click="console.log('DX Upgrade clicked', upg.id)">
-              <div class="upg-name">{{ upg.name }}</div>
-              <div class="upg-cost">
-                <span class="cost-val">{{ format(upg.price) }}</span>
-                <span class="cost-unit">DX</span>
-              </div>
-              <div class="upg-level">Lv.{{ upg.level }}</div>
-            </button>
+            <template v-for="upg in game.other_upgrades" :key="upg.id">
+              <button v-if="upg.type === 'ddx'"
+                      class="upg-card-mini"
+                      :class="{
+                        'can-buy': game.dx_points.gte(upg.price),
+                        'locked': game.dx_points.lt(upg.price)
+                      }"
+                      @click="buyOtherUpgrade(upg)">
+                <div class="upg-name">{{ upg.name }}</div>
+                <div class="upg-cost">
+                  <span class="cost-val">{{ format(upg.price) }}</span>
+                  <span class="cost-unit">DX</span>
+                </div>
+                <div class="upg-level">Lv.{{ upg.level }}</div>
+              </button>
+            </template>
           </div>
         </div>
 
-        <!-- 3. Settings 탭 (저장 및 초기화) -->
+        <!-- [Settings 탭] -->
         <div v-if="activeTab === 'settings'" class="tab-pane">
           <div class="settings-group">
             <button class="sub-btn" @click="saveGame">SAVE GAME</button>
@@ -128,15 +130,53 @@
 
       </main>
     </div>
+
+    <!-- 커스텀 알림 컴포넌트 -->
+    <CustomAlert
+      :visible="alertState.visible"
+      :message="alertState.message"
+      :title="alertState.title"
+      :is-confirm="alertState.isConfirm"
+      @close="alertState.visible = false"
+      @confirm="alertState.onConfirm"
+      @cancel="alertState.onCancel"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import Decimal from 'break_infinity.js'
+import CustomAlert from './components/CustomAlert.vue'
 
 const activeTab = ref('fx')
 const isTapping = ref(false)
+
+// 알림 상태 관리
+const alertState = reactive({
+  visible: false,
+  message: '',
+  title: '',
+  isConfirm: false,
+  onConfirm: () => {},
+  onCancel: () => {}
+})
+
+const showAlert = (message, title = '알림') => {
+  alertState.message = message
+  alertState.title = title
+  alertState.isConfirm = false
+  alertState.visible = true
+}
+
+const showConfirm = (message, onConfirm, title = '확인') => {
+  alertState.message = message
+  alertState.title = title
+  alertState.isConfirm = true
+  alertState.onConfirm = onConfirm
+  alertState.onCancel = () => {}
+  alertState.visible = true
+}
 
 const tabs = [
   { id: 'fx', name: 'Variable', icon: '📊' },
@@ -147,8 +187,8 @@ const tabs = [
 
 // 초기 게임 데이터 구조
 const game = reactive({
-  fv: new Decimal(10),
-  fx : [1,0,0,0,0,0,0,0,0,0],
+  fv: new Decimal(102314213421341),
+  fx : [1,12342135125123456,0,0,0,0,0,0,0,0],
   fx_str: "1",
   current_x: new Decimal(0),
   max_x: new Decimal(1),
@@ -166,8 +206,10 @@ const game = reactive({
     9: { id: 9, name: 'Upgrade x⁹', price: new Decimal(10000000000), effect: 0.2, type: 'add', level: 0 }
   },
   other_upgrades : {
-    0: { id: 0, name: 'Upgrade max x', price: new Decimal(1000), type: 'add', level: 0 },
-    1: { id: 1, name: 'Upgrade x increase', price: new Decimal(100), type: 'add', level: 0 },
+    0: { id: 0, name: 'Upgrade max x', price: new Decimal(1000), type: 'fx', level: 0 },
+    1: { id: 1, name: 'Upgrade x increase', price: new Decimal(100), type: 'fx', level: 0 },
+    2: { id: 0, name: 'Increase x in f\'(x)', price: new Decimal(10), type:'ddx',level: 0 },
+    3: { id: 1, name: 'Double DX Gain', price: new Decimal(50), type:'ddx',level: 0 }
     // 2: { id: 2, name: 'Upgrade x²', price: new Decimal(1000), effect: 0.05, type: 'add', level: 0 },
     // 3: { id: 3, name: 'Upgrade x³', price: new Decimal(1000), effect: 0.2, type: 'add', level: 0 },
     // 4: { id: 4, name: 'Upgrade x⁴', price: new Decimal(10000), effect: 0.2, type: 'add', level: 0 },
@@ -179,11 +221,10 @@ const game = reactive({
   },
   prestige_x: new Decimal(1), // 미분 시 대입할 x값
   dx_points: new Decimal(0),  // 미분 재화
-  dx_multiplier: new Decimal(1), // 미분 보너스 배수
-  dx_upgrades: {
-    0: { id: 0, name: 'Increase x in f\'(x)', price: new Decimal(10), level: 0 },
-    1: { id: 1, name: 'Double DX Gain', price: new Decimal(50), level: 0 }
-  }
+  dx_multiplier: new Decimal(0), // 미분 보너스 배수
+  // dx_upgrades: {
+  //
+  // }
 })
 
 const SUPERSCRIPT_MAP = {
@@ -235,11 +276,10 @@ const differentiate = (equation, x) => {
 }
 const differentiate_bt = () => { //made by gemini 3.0 pro
   if (game.fv.gte("1e10")) {
-    if (confirm("미분시 현재 모든 함수가 초기화되고 보상을 얻습니다. 진행하시겠습니까?")) {
-      // 보상 계산: fv가 1e10일 때 1 DX, 그 이후 10배마다 약 2배씩 증가 (로그 기반)
-      // 공식: 10 ^ (log10(fv) - 10) / 2
+    showConfirm("미분시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분시 f'("+game.prestige_x+") = "+differentiate(game.fx,game.prestige_x)+" 만큼의 DX를 얻습니다", () => {
       let gain = differentiate(game.fx, game.prestige_x);
       game.dx_points = game.dx_points.plus(gain);
+      game.dx_multiplier = game.dx_multiplier.plus(gain);
 
       // 주요 진행도 초기화
       game.fv = new Decimal(10);
@@ -261,10 +301,10 @@ const differentiate_bt = () => { //made by gemini 3.0 pro
       // UI 갱신
       makefx();
       
-      alert(`${format(gain)} DX 포인트를 획득했습니다!`);
-    }
+      showAlert(`${format(gain)} DX 포인트를 획득했습니다!`);
+    }, "미분 확인");
   } else {
-    alert("미분하려면 최소 1.00e10 FV가 필요합니다.");
+    showAlert("미분하려면 최소 1.00e10 FV가 필요합니다.");
   }
 }
 
@@ -273,6 +313,7 @@ const manualTick = () => {
   if (game.current_x.gte(game.max_x)) {
     game.current_x = new Decimal(0)
     game.fv = game.fv.plus(equation_calc(game.fx, game.max_x))
+    game.fv = game.fv.plus(game.dx_multiplier)
   }
 }
 
@@ -295,27 +336,58 @@ const buyUpgrade = (upg) => {
   }
 }
 const buyOtherUpgrade = (upg) => {
+  // if (upg.price ==="NONE"){
+  //   return -1;
+  // }
   let price = new Decimal(upg.price);
-  if (game.fv.gte(upg.price)) {
-    game.fv = game.fv.minus(upg.price)
-    upg.level++
+  if (upg.type ==='fx'){
+    if (game.fv.gte(upg.price)) {
+      game.fv = game.fv.minus(upg.price)
+      upg.level++
 
-    if (upg.id === 0) {
-      game.max_x = game.max_x.plus(1)
-      game.x_increase = game.x_increase.times(1.03)
-      upg.price = price.times(1.5).floor()
-      if( upg.level %10 === 0){
-        game.max_x = game.max_x.times(1.3)
-      }
-    } else if (upg.id === 1) {
-      game.x_increase = game.x_increase.plus(0.05)
-      upg.price = price.times(1.8).floor()
-      if( upg.level %10 === 0){
-        game.x_increase = game.x_increase.times(1.3)
+      if (upg.id === 0) {
+        game.max_x = game.max_x.plus(1)
+        game.x_increase = game.x_increase.times(1.03)
+        upg.price = price.times(1.5).floor()
+        if( upg.level %10 === 0){
+          game.max_x = game.max_x.times(1.3)
+        }
+      } else if (upg.id === 1) {
+        game.x_increase = game.x_increase.plus(0.01)
+        upg.price = price.times(1.8).floor()
+        if( upg.level %10 === 0){
+          game.x_increase = game.x_increase.times(1.3);
+        }
+        if (upg.level >= 100){
+          game.x_increase = game.x_increase.plus("1e9999");
+          upg.level = "MAX";
+          upg.price = upg.price.plus("1e9999")
+        }
       }
     }
   }
-  console.log(game.x_increase)
+  else if (upg.type ==='ddx') {
+    if (game.dx_points.gte(upg.price)) {
+      game.dx_points = game.dx_points.minus(upg.price)
+      upg.level++
+
+      if (upg.id === 0) {
+        game.prestige_x = game.prestige_x.plus(1)
+        upg.price = price.times(2).floor()
+        if (upg.level % 10 === 0) {
+          game.prestige_x = game.prestige_x.times(1.5)
+        }
+      } else if (upg.id === 1) {
+        // game.dx_multiplier = game.dx_multiplier.times(2)
+        // upg.price = price.times(3).floor()
+        // if (upg.level % 10 === 0) {
+        //   game.dx_multiplier = game.dx_multiplier.times(2);
+        // }
+      }
+    }
+  }
+
+  // console.log(game.x_increase)
 }
 
 const saveGame = () => {
@@ -329,25 +401,45 @@ const loadGame = () => {
 
   const data = JSON.parse(saved);
 
-  Object.assign(game, data);
+  // 상위 레벨의 기본 속성들을 수동으로 복구 (Decimal 객체화)
+  game.fv = new Decimal(data.fv || 10);
+  game.current_x = new Decimal(data.current_x || 0);
+  game.max_x = new Decimal(data.max_x || 1);
+  game.x_increase = new Decimal(data.x_increase || 0.05);
+  game.prestige_x = new Decimal(data.prestige_x || 1);
+  game.dx_points = new Decimal(data.dx_points || 0);
+  game.dx_multiplier = new Decimal(data.dx_multiplier || 0);
+  
+  if (data.fx) game.fx = data.fx;
 
-  game.fv = new Decimal(data.fv);
-  game.current_x = new Decimal(data.current_x);
-  game.max_x = new Decimal(data.max_x);
-  game.x_increase = new Decimal(data.x_increase);
+  // x_upgrades 복구: 기존 game 구조의 key를 순회하며 data에서 값만 가져옴 (구조 변경 대응)
+  if (data.x_upgrades) {
+    for (let key in game.x_upgrades) {
+      if (data.x_upgrades[key]) {
+        game.x_upgrades[key].level = data.x_upgrades[key].level;
+        game.x_upgrades[key].price = new Decimal(data.x_upgrades[key].price);
+      }
+    }
+  }
 
-  for (let key in game.x_upgrades) {
-    game.x_upgrades[key].price = new Decimal(data.x_upgrades[key].price);
+  // other_upgrades 복구: (fx 타입과 ddx 타입 모두 포함)
+  if (data.other_upgrades) {
+    for (let key in game.other_upgrades) {
+      if (data.other_upgrades[key]) {
+        game.other_upgrades[key].level = data.other_upgrades[key].level;
+        game.other_upgrades[key].price = new Decimal(data.other_upgrades[key].price);
+      }
+    }
   }
 
   makefx();
 }
 
 const resetGame = () => {
-  if (confirm("Reset all data?")) {
+  showConfirm("모든 데이터를 초기화하시겠습니까?", () => {
     localStorage.removeItem('math_idle_save');
     location.reload();
-  }
+  }, "초기화 확인");
 }
 
 onMounted(() => {
