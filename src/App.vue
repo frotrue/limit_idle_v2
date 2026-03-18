@@ -120,6 +120,37 @@
           </div>
         </div>
 
+        <!-- 3. Automation 탭 -->
+        <div v-if="activeTab === 'auto'" class="tab-pane">
+          <div class="section-title">Automation</div>
+          <div class="dx-header-card" style="margin-bottom: 20px;">
+            <div class="label">DIFFERENTIATION COUNT</div>
+            <div class="dx-resource-display" style="font-size: 1.5rem;">{{ game.differentiationCount }}</div>
+          </div>
+
+          <div class="upgrade-grid">
+            <div v-for="auto in game.auto_upgrades" :key="auto.id"
+                 class="upg-card-mini"
+                 :class="{ 'locked': game.differentiationCount < auto.unlockedAt }">
+              <div class="upg-name">{{ auto.name }}</div>
+              
+              <template v-if="game.differentiationCount >= auto.unlockedAt">
+                <div class="upg-level">Interval: {{ auto.interval / 1000 }}s</div>
+                <button class="sub-btn" 
+                        :style="{ backgroundColor: auto.active ? '#5e81ac' : '#1a1a1e', width: '100%' }"
+                        @click="auto.active = !auto.active">
+                  {{ auto.active ? 'ACTIVE' : 'INACTIVE' }}
+                </button>
+              </template>
+              <template v-else>
+                <div class="upg-desc" style="font-size: 0.7rem; color: #666;">
+                  Unlock at {{ auto.unlockedAt }} Diffs
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
         <!-- [Settings 탭] -->
         <div v-if="activeTab === 'settings'" class="tab-pane">
           <div class="settings-group">
@@ -147,7 +178,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import Decimal from 'break_infinity.js'
-import CustomAlert from './components/CustomAlert.vue'
+// import CustomAlert from './components/CustomAlert.vue'
 
 const activeTab = ref('fx')
 const isTapping = ref(false)
@@ -222,6 +253,12 @@ const game = reactive({
   prestige_x: new Decimal(1), // 미분 시 대입할 x값
   dx_points: new Decimal(0),  // 미분 재화
   dx_multiplier: new Decimal(0), // 미분 보너스 배수
+  differentiationCount: 0,
+  auto_upgrades: [
+    { id: 0, name: 'Auto Variable', targetType: 'x_upgrades', interval: 1000, lastTick: 0, unlockedAt: 1, active: false },
+    { id: 1, name: 'Auto FV Upgrades', targetType: 'other_upgrades_fx', interval: 2000, lastTick: 0, unlockedAt: 3, active: false },
+    { id: 2, name: 'Auto DX Upgrades', targetType: 'other_upgrades_ddx', interval: 5000, lastTick: 0, unlockedAt: 5, active: false },
+  ]
   // dx_upgrades: {
   //
   // }
@@ -280,6 +317,7 @@ const differentiate_bt = () => { //made by gemini 3.0 pro
       let gain = differentiate(game.fx, game.prestige_x);
       game.dx_points = game.dx_points.plus(gain);
       game.dx_multiplier = game.dx_multiplier.plus(gain);
+      game.differentiationCount++;
 
       // 주요 진행도 초기화
       game.fv = new Decimal(10);
@@ -308,6 +346,32 @@ const differentiate_bt = () => { //made by gemini 3.0 pro
   }
 }
 
+const performAutoUpgrade = (auto) => {
+  if (auto.targetType === 'x_upgrades') {
+    Object.values(game.x_upgrades).forEach(upg => buyUpgrade(upg));
+  } else if (auto.targetType === 'other_upgrades_fx') {
+    Object.values(game.other_upgrades).forEach(upg => {
+      if (upg.type === 'fx') buyOtherUpgrade(upg);
+    });
+  } else if (auto.targetType === 'other_upgrades_ddx') {
+    Object.values(game.other_upgrades).forEach(upg => {
+      if (upg.type === 'ddx') buyOtherUpgrade(upg);
+    });
+  }
+}
+
+const autoTick = () => {
+  const now = Date.now();
+  game.auto_upgrades.forEach(auto => {
+    if (auto.active && game.differentiationCount >= auto.unlockedAt) {
+      if (now - auto.lastTick >= auto.interval) {
+        auto.lastTick = now;
+        performAutoUpgrade(auto);
+      }
+    }
+  });
+}
+
 const manualTick = () => {
   game.current_x = game.current_x.plus(game.x_increase)
   if (game.current_x.gte(game.max_x)) {
@@ -315,6 +379,7 @@ const manualTick = () => {
     game.fv = game.fv.plus(equation_calc(game.fx, game.max_x))
     game.fv = game.fv.plus(game.dx_multiplier)
   }
+  autoTick();
 }
 
 const buyUpgrade = (upg) => {
@@ -409,6 +474,7 @@ const loadGame = () => {
   game.prestige_x = new Decimal(data.prestige_x || 1);
   game.dx_points = new Decimal(data.dx_points || 0);
   game.dx_multiplier = new Decimal(data.dx_multiplier || 0);
+  game.differentiationCount = data.differentiationCount || 0;
   
   if (data.fx) game.fx = data.fx;
 
@@ -430,6 +496,16 @@ const loadGame = () => {
         game.other_upgrades[key].price = new Decimal(data.other_upgrades[key].price);
       }
     }
+  }
+
+  // auto_upgrades 복구
+  if (data.auto_upgrades) {
+    data.auto_upgrades.forEach((savedAuto, index) => {
+      if (game.auto_upgrades[index]) {
+        game.auto_upgrades[index].active = savedAuto.active;
+        game.auto_upgrades[index].lastTick = savedAuto.lastTick || 0;
+      }
+    });
   }
 
   makefx();
