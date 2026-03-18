@@ -218,8 +218,8 @@ const tabs = [
 
 // 초기 게임 데이터 구조
 const game = reactive({
-  fv: new Decimal(102314213421341),
-  fx : [1,12342135125123456,0,0,0,0,0,0,0,0],
+  fv: new Decimal(10),
+  fx : [1,0,0,0,0,0,0,0,0,0],
   fx_str: "1",
   current_x: new Decimal(0),
   max_x: new Decimal(1),
@@ -240,7 +240,7 @@ const game = reactive({
     0: { id: 0, name: 'Upgrade max x', price: new Decimal(1000), type: 'fx', level: 0 },
     1: { id: 1, name: 'Upgrade x increase', price: new Decimal(100), type: 'fx', level: 0 },
     2: { id: 0, name: 'Increase x in f\'(x)', price: new Decimal(10), type:'ddx',level: 0 },
-    3: { id: 1, name: 'Double DX Gain', price: new Decimal(50), type:'ddx',level: 0 }
+    3: { id: 1, name: 'Decrease Auto Variable Interval', price: new Decimal(50), type:'ddx',level: 0 }
     // 2: { id: 2, name: 'Upgrade x²', price: new Decimal(1000), effect: 0.05, type: 'add', level: 0 },
     // 3: { id: 3, name: 'Upgrade x³', price: new Decimal(1000), effect: 0.2, type: 'add', level: 0 },
     // 4: { id: 4, name: 'Upgrade x⁴', price: new Decimal(10000), effect: 0.2, type: 'add', level: 0 },
@@ -253,9 +253,9 @@ const game = reactive({
   prestige_x: new Decimal(1), // 미분 시 대입할 x값
   dx_points: new Decimal(0),  // 미분 재화
   dx_multiplier: new Decimal(0), // 미분 보너스 배수
-  differentiationCount: 0,
+  differentiationCount: new Decimal(0), // 미분 횟수
   auto_upgrades: [
-    { id: 0, name: 'Auto Variable', targetType: 'x_upgrades', interval: 1000, lastTick: 0, unlockedAt: 1, active: false },
+    { id: 0, name: 'Auto Variable', targetType: 'x_upgrades', interval: 10000, lastTick: 0, unlockedAt: 1, active: false },
     { id: 1, name: 'Auto FV Upgrades', targetType: 'other_upgrades_fx', interval: 2000, lastTick: 0, unlockedAt: 3, active: false },
     { id: 2, name: 'Auto DX Upgrades', targetType: 'other_upgrades_ddx', interval: 5000, lastTick: 0, unlockedAt: 5, active: false },
   ]
@@ -317,7 +317,7 @@ const differentiate_bt = () => { //made by gemini 3.0 pro
       let gain = differentiate(game.fx, game.prestige_x);
       game.dx_points = game.dx_points.plus(gain);
       game.dx_multiplier = game.dx_multiplier.plus(gain);
-      game.differentiationCount++;
+      game.differentiationCount = game.differentiationCount.plus(1);
 
       // 주요 진행도 초기화
       game.fv = new Decimal(10);
@@ -348,7 +348,7 @@ const differentiate_bt = () => { //made by gemini 3.0 pro
 
 const performAutoUpgrade = (auto) => {
   if (auto.targetType === 'x_upgrades') {
-    Object.values(game.x_upgrades).forEach(upg => buyUpgrade(upg));
+    Object.values(game.x_upgrades).reverse().forEach(upg => buyUpgrade(upg));
   } else if (auto.targetType === 'other_upgrades_fx') {
     Object.values(game.other_upgrades).forEach(upg => {
       if (upg.type === 'fx') buyOtherUpgrade(upg);
@@ -443,16 +443,17 @@ const buyOtherUpgrade = (upg) => {
           game.prestige_x = game.prestige_x.times(1.5)
         }
       } else if (upg.id === 1) {
-        // game.dx_multiplier = game.dx_multiplier.times(2)
-        // upg.price = price.times(3).floor()
-        // if (upg.level % 10 === 0) {
-        //   game.dx_multiplier = game.dx_multiplier.times(2);
-        // }
+        if (game.auto_upgrades[0].interval > 100) {
+          upg.level++;
+          game.auto_upgrades[0].interval = Math.max(100, game.auto_upgrades[0].interval * 0.8);
+          upg.price = price.times(2).floor();
+        } else {
+          upg.level = "MAX";
+          upg.price = new Decimal("1e9999");
+        }
       }
     }
   }
-
-  // console.log(game.x_increase)
 }
 
 const saveGame = () => {
