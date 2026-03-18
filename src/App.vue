@@ -178,7 +178,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import Decimal from 'break_infinity.js'
-// import CustomAlert from './components/CustomAlert.vue'
+import CustomAlert from './components/CustomAlert.vue'
 
 const activeTab = ref('fx')
 const isTapping = ref(false)
