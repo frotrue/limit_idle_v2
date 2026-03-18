@@ -1,3 +1,11 @@
+<!--
+Limit Idle
+reference : gemini 3.0
+github : frotrue/limit-idle
+using tech : vue.js, break_infinity.js
+made by frotrue
+-->
+
 <template>
   <div id="app" class="app-wrapper">
     <div class="container">
