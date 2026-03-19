@@ -243,7 +243,7 @@ made by frotrue
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import Decimal from 'break_infinity.js'
+import Decimal from 'break_eternity.js'
 import CustomAlert from './components/CustomAlert.vue'
 
 const activeTab = ref('fx')
