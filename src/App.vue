@@ -286,8 +286,8 @@ const tabs = [
 
 // 초기 게임 데이터 구조
 const game = reactive({
-  fv: new Decimal(10),
-  fx : [1,0,0,0,0,0,0,0,0,0],
+  fv: new Decimal(10), // 초기 자원
+  fx : [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)],
   fx_str: "1",
   current_x: new Decimal(0),
   max_x: new Decimal(1),
@@ -342,10 +342,11 @@ const format = (num) => {
 const makefx = () => {
   let parts = []
   for (let i = game.fx.length - 1; i >= 0; i--) {
-    if (game.fx[i] !== 0) {
-      if (i === 0) parts.push(`${game.fx[i]}`)
-      else if (i === 1) parts.push(`${game.fx[i]}x`)
-      else parts.push(`${game.fx[i]}x${SUPERSCRIPT_MAP[i]}`)
+    if (game.fx[i].neq(0)) {
+      let valStr = format(game.fx[i]);
+      if (i === 0) parts.push(`${valStr}`)
+      else if (i === 1) parts.push(`${valStr}x`)
+      else parts.push(`${valStr}x${SUPERSCRIPT_MAP[i]}`)
     }
   }
   game.fx_str = parts.join(" + ") || "0"
@@ -354,8 +355,8 @@ const makefx = () => {
 const equation_calc = (equation, x) => {
   let total = new Decimal(0)
   for (let i = 0; i < equation.length; i++) {
-    if (equation[i] === 0) continue;
-    let term = new Decimal(equation[i]).times(Decimal.pow(x, i));
+    if (equation[i].eq(0)) continue;
+    let term = equation[i].times(Decimal.pow(x, i));
     total = total.plus(term);
   }
   return total;
@@ -364,7 +365,7 @@ const equation_calc = (equation, x) => {
 const differentiate = (equation, x) => {
     let temp_arr = [];
     for (let i = 1; i < equation.length; i++) {
-        temp_arr[i - 1] = equation[i]*i;
+        temp_arr[i - 1] = equation[i].times(i);
     }
     while (temp_arr.length < equation.length) {
         temp_arr.push(new Decimal(0));
@@ -377,7 +378,7 @@ const differentiate = (equation, x) => {
 }
 const differentiate_bt = () => { //made by gemini 3.0 pro
   if (game.fv.gte("1e10")) {
-    showConfirm("미분시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분시 f'("+game.prestige_x+") = "+differentiate(game.fx,game.prestige_x)+" 만큼의 DX를 얻습니다", () => {
+    showConfirm("미분시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분시 f'("+game.prestige_x+") = "+format(differentiate(game.fx,game.prestige_x))+" 만큼의 DX를 얻습니다", () => {
       let gain = differentiate(game.fx, game.prestige_x);
       game.dx_points = game.dx_points.plus(gain);
       game.dx_multiplier = game.dx_multiplier.plus(gain);
@@ -385,7 +386,7 @@ const differentiate_bt = () => { //made by gemini 3.0 pro
 
       // 주요 진행도 초기화
       game.fv = new Decimal(10);
-      game.fx = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
       game.current_x = new Decimal(0);
       game.max_x = new Decimal(1);
       game.x_increase = new Decimal(0.05);
@@ -503,19 +504,26 @@ const manualTick = () => {
   // FV per sec = Gain * (Cycles per tick) * 10 (since 1 tick = 0.1s)
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
 
-  // 2. 실제 자원 획득 처리 (x_increase가 max_x보다 클 경우 대비 루프/나눗셈 처리)
-  game.current_x = game.current_x.plus(game.x_increase);
-  
-  if (game.current_x.gte(game.max_x)) {
-    // 몇 번의 사이클이 완료되었는지 계산
-    const completedCycles = game.current_x.div(game.max_x).floor();
-    const totalGain = gainPerCycle.times(completedCycles);
+  // 2. 실제 자원 획득 처리
+  if (game.x_increase.gte(game.max_x)) {
+    // x_increase가 max_x를 초과할 경우: 즉시 1회분 지급 후 게이지 초기화
+    game.fv = game.fv.plus(gainPerCycle);
+    game.stats.total_fv = game.stats.total_fv.plus(gainPerCycle);
     
-    game.fv = game.fv.plus(totalGain);
-    game.stats.total_fv = game.stats.total_fv.plus(totalGain);
+    // x_increase 스탯은 유지하고 게이지만 초기화
+    game.current_x = new Decimal(0);
+  } else {
+    // 일반적인 상황: x가 서서히 차오름
+    game.current_x = game.current_x.plus(game.x_increase);
     
-    // 남은 x값 유지
-    game.current_x = game.current_x.minus(completedCycles.times(game.max_x));
+    if (game.current_x.gte(game.max_x)) {
+      // max_x에 도달하면 1회분 지급
+      game.fv = game.fv.plus(gainPerCycle);
+      game.stats.total_fv = game.stats.total_fv.plus(gainPerCycle);
+      
+      // 초과분 상관없이 0으로 초기화
+      game.current_x = new Decimal(0);
+    }
   }
 
   // 플레이 시간 업데이트
@@ -530,10 +538,9 @@ const buyUpgrade = (upg) => {
     upg.level++
 
     if (upg.type === 'add') {
-      game.fx[upg.id] += 1
+      game.fx[upg.id] = game.fx[upg.id].plus(1)
       if( upg.level %10 === 0){
-        game.fx[upg.id] *= 1.5
-        game.fx[upg.id] = Math.floor(game.fx[upg.id])
+        game.fx[upg.id] = game.fx[upg.id].times(1.5).floor()
         upg.price = upg.price.times(10).floor()
       }
       makefx()
@@ -551,7 +558,7 @@ const buyOtherUpgrade = (upg) => {
 
       if (upg.id === 0) {
         game.max_x = game.max_x.plus(1)
-        game.x_increase = game.x_increase.times(1.03)
+        game.x_increase = game.x_increase.times(1.1)
         upg.price = price.times(1.5).floor()
         if( upg.level %10 === 0){
           game.max_x = game.max_x.times(1.3)
@@ -561,7 +568,7 @@ const buyOtherUpgrade = (upg) => {
         }
       } else if (upg.id === 1) {
         game.x_increase = game.x_increase.plus(0.01)
-        upg.price = price.times(1.8).floor()
+        upg.price = price.times(1.6).floor()
         if( upg.level %10 === 0){
           game.x_increase = game.x_increase.times(1.3);
         }
@@ -618,7 +625,9 @@ const loadGame = () => {
   game.dx_multiplier = new Decimal(data.dx_multiplier || 0);
   game.differentiationCount = new Decimal(data.differentiationCount || 0);
   
-  if (data.fx) game.fx = data.fx;
+  if (data.fx) {
+    game.fx = data.fx.map(val => new Decimal(val));
+  }
 
   // x_upgrades 복구
   if (data.x_upgrades) {
