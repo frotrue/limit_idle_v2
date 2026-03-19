@@ -73,7 +73,7 @@ made by frotrue
           
           <div class="section-header">
             <div class="section-title">Other Upgrades</div>
-            <button class="buy-max-btn" @click="Object.values(game.other_upgrades).forEach(u => { if(u.type==='fx') buyMaxOtherUpgrade(u) })">BUY MAX</button>
+            <button class="buy-max-btn" @click="buyMaxAllOtherUpgrades('fx')">BUY MAX</button>
           </div>
           <!-- 기타 수치(max x, x increase) 업그레이드 그리드 -->
           <div class="upgrade-grid">
@@ -117,7 +117,7 @@ made by frotrue
           <!-- 미분 업그레이드 그리드 -->
           <div class="section-header">
             <div class="section-title">Derivative Upgrades</div>
-            <button class="buy-max-btn" @click="Object.values(game.other_upgrades).forEach(u => { if(u.type==='ddx') buyMaxOtherUpgrade(u) })">BUY MAX</button>
+            <button class="buy-max-btn" @click="buyMaxAllOtherUpgrades('ddx')">BUY MAX</button>
           </div>
           <div class="upgrade-grid">
             <template v-for="upg in game.other_upgrades" :key="upg.id">
@@ -436,6 +436,35 @@ const autoTick = () => {
   });
 }
 
+const buyMaxAllOtherUpgrades = (type) => {
+  while (true) {
+    let upgrades = Object.values(game.other_upgrades)
+      .filter(u => u.type === type && u.level !== "MAX");
+    
+    if (upgrades.length === 0) break;
+    
+    // Find the cheapest upgrade
+    let cheapest = upgrades.reduce((prev, curr) => {
+      return new Decimal(curr.price).lt(new Decimal(prev.price)) ? curr : prev;
+    });
+    
+    // Try to buy it once
+    let price = new Decimal(cheapest.price);
+    let canAfford = false;
+    if (type === 'fx') {
+      canAfford = game.fv.gte(price);
+    } else if (type === 'ddx') {
+      canAfford = game.dx_points.gte(price);
+    }
+    
+    if (canAfford) {
+      buyOtherUpgrade(cheapest);
+    } else {
+      break;
+    }
+  }
+}
+
 const buyMaxUpgrade = (upg) => {
   let bought = false;
   // x_upgrades의 경우 가격이 10레벨마다 바뀌므로 루프로 처리 (성능상 무리 없음)
@@ -527,6 +556,9 @@ const buyOtherUpgrade = (upg) => {
         if( upg.level %10 === 0){
           game.max_x = game.max_x.times(1.3)
         }
+        if (game.other_upgrades["1"].level >=100){
+          game.x_increase = game.max_x
+        }
       } else if (upg.id === 1) {
         game.x_increase = game.x_increase.plus(0.01)
         upg.price = price.times(1.8).floor()
@@ -534,7 +566,7 @@ const buyOtherUpgrade = (upg) => {
           game.x_increase = game.x_increase.times(1.3);
         }
         if (upg.level >= 100){
-          game.x_increase = game.x_increase.plus("1e9999");
+          game.x_increase = game.max_x;
           upg.level = "MAX";
           upg.price = upg.price.plus("1e9999")
         }
