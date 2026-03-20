@@ -58,10 +58,16 @@
   font-weight: normal;
 }
 
-body {
+body, html {
+  margin: 0;
+  padding: 0;
   min-height: 100vh;
+  width: 100%;
+  background: #050505; /* 매칭을 위해 기본 배경을 어둡게 설정 */
+}
+
+body {
   color: var(--color-text);
-  background: var(--color-background);
   transition:
     color 0.5s,
     background-color 0.5s;
