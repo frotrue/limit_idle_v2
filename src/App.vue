@@ -689,31 +689,27 @@ onMounted(() => {
 @import url('https://webfontworld.github.io/gmarket/GmarketSans.css');
 
 #app, .app-wrapper {
-  /* 화면 전체를 채우되 내부 요소를 중앙으로 보냄 */
-  display: flex;
-  justify-content: center;
-  align-items: flex-start; /* 혹은 center (취향 차이) */
+  display: block; /* Flex 대신 Block으로 설정하여 전체 너비 확보 */
   background-color: #050505;
   min-height: 100vh;
-  width: 100vw; /* 뷰포트 전체 너비 */
+  width: 100vw;
   margin: 0;
   padding: 0;
-  overflow-x: hidden; /* 가로 스크롤 절대 방지 */
+  overflow-x: hidden;
 }
 
 .container {
-  /* 실제 게임 화면이 들어가는 곳 */
   width: 100%;
-  max-width: 450px; /* 창이 커져도 이 이상 안 넓어짐 */
+  max-width: none; /* 너비 제한을 해제하여 모든 화면에 꽉 차게 함 */
   background-color: #0f0f11;
   display: flex;
   flex-direction: column;
   padding: 16px;
+  /* 상단 상태바 영역 확보 (선택사항이나 추천) */
+  padding-top: calc(16px + env(safe-area-inset-top));
   gap: 20px;
   min-height: 100vh;
-  box-sizing: border-box; /* 패딩이 너비에 포함되도록 함 */
-  border-left: 1px solid #2a2a2e; /* PC에서 구분선 역할을 위해 추가 (선택) */
-  border-right: 1px solid #2a2a2e;
+  box-sizing: border-box;
 }
 .header-card {
   background: linear-gradient(145deg, #1a1a1e, #141417); padding: 24px; border-radius: 20px; border: 1px solid #2a2a2e; text-align: center;
