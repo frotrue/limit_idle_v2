@@ -672,15 +672,14 @@ onMounted(() => {
   background-color: #0f0f11;
   display: flex;
   flex-direction: column;
-  /* 상단 상태바 및 하단바 영역 강제 확보 */
-  padding-top: env(safe-area-inset-top, 20px);
-  padding-bottom: env(safe-area-inset-bottom, 20px);
+  /* 시스템 바 가려짐 방지: 최소 상단 44px, 하단 34px 여백 강제 확보 */
+  padding-top: max(44px, env(safe-area-inset-top, 44px));
+  padding-bottom: max(34px, env(safe-area-inset-bottom, 34px));
   padding-left: 16px;
   padding-right: 16px;
   gap: 20px;
   height: 100%;
   box-sizing: border-box;
-  /* 내부 콘텐츠만 스크롤되도록 설정 */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
