@@ -640,17 +640,30 @@ onMounted(() => {
 
 <style scoped>
 @import url('https://webfontworld.github.io/gmarket/GmarketSans.css');
+/* 전역 스크롤 방지 및 높이 고정 (Capacitor 대응) */
+:deep(html), :deep(body) {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+
 #app, .app-wrapper {
   display: flex;
   justify-content: center;
   align-items: flex-start;
   background-color: #050505;
-  /* dvh: 동적 뷰포트 높이 사용 (모바일 바 고려) */
-  min-height: 100dvh;
+  /* 화면 전체 고정 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden;
 }
 
 .container {
@@ -659,11 +672,17 @@ onMounted(() => {
   background-color: #0f0f11;
   display: flex;
   flex-direction: column;
-  /* 상단 노치 및 하단 바 영역 보호 */
-  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)) 16px;
+  /* 상단 상태바 및 하단바 영역 강제 확보 */
+  padding-top: env(safe-area-inset-top, 20px);
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+  padding-left: 16px;
+  padding-right: 16px;
   gap: 20px;
-  min-height: 100dvh;
+  height: 100%;
   box-sizing: border-box;
+  /* 내부 콘텐츠만 스크롤되도록 설정 */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 @media (min-width: 451px) { .container { border-left: 1px solid #2a2a2e; border-right: 1px solid #2a2a2e; } }
 .header-card { background: linear-gradient(145deg, #1a1a1e, #141417); padding: 24px; border-radius: 20px; border: 1px solid #2a2a2e; text-align: center; }
