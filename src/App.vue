@@ -20,24 +20,19 @@ made by frotrue
           <div class="progress-info">
             <span>X-Axis: {{ format(game.current_x) }} / {{ format(game.max_x) }}</span>
           </div>
-          <!-- 진행도 바 (필요 시 주석 해제) -->
-          <!--
-          <div class="progress-container">
-            <div class="progress-bar" :style="{ width: (game.current_x.div(game.max_x).toNumber() * 100) + '%' }"></div>
-            <div class="progress-glow" :style="{ width: (game.current_x.div(game.max_x).toNumber() * 100) + '%' }"></div>
-          </div>
-          -->
         </div>
       </header>
 
       <!-- [네비게이션] 탭 메뉴 버튼 -->
       <nav class="tab-menu">
-        <button v-for="tab in tabs" :key="tab.id"
-                :class="{ active: activeTab === tab.id }"
-                @click="activeTab = tab.id">
-          <span class="tab-icon">{{ tab.icon }}</span>
-          <span class="tab-label">{{ tab.name }}</span>
-        </button>
+        <template v-for="tab in tabs" :key="tab.id">
+          <button v-if="tab.id !== 'exp' || game.unlocked_exp"
+                  :class="{ active: activeTab === tab.id }"
+                  @click="activeTab = tab.id">
+            <span class="tab-icon">{{ tab.icon }}</span>
+            <span class="tab-label">{{ tab.name }}</span>
+          </button>
+        </template>
       </nav>
 
       <!-- [메인 콘텐츠 영역] 선택된 탭에 따라 내용 변경 -->
@@ -49,7 +44,6 @@ made by frotrue
             <div class="section-title">Variable Upgrades</div>
             <button class="buy-max-btn" @click="Object.values(game.x_upgrades).reverse().forEach(u => buyMaxUpgrade(u))">BUY MAX</button>
           </div>
-          <!-- x^n 계수 업그레이드 그리드 -->
           <div class="upgrade-grid">
             <button v-for="upg in game.x_upgrades"
                     :key="upg.id"
@@ -75,7 +69,6 @@ made by frotrue
             <div class="section-title">Other Upgrades</div>
             <button class="buy-max-btn" @click="buyMaxAllOtherUpgrades('fx')">BUY MAX</button>
           </div>
-          <!-- 기타 수치(max x, x increase) 업그레이드 그리드 -->
           <div class="upgrade-grid">
             <template v-for="upg in game.other_upgrades" :key="upg.id">
               <button v-if="upg.type === 'fx'"
@@ -99,13 +92,11 @@ made by frotrue
 
         <!-- 2. Derivative 탭 (환생 및 미분 보상) -->
         <div v-if="activeTab === 'fdx'" class="tab-pane">
-          <!-- DX 포인트 표시부 -->
           <div class="dx-header-card">
             <div class="label">DERIVATIVE POINTS</div>
             <div class="dx-resource-display">{{ format(game.dx_points) }} DX</div>
           </div>
 
-          <!-- 미분(환생) 버튼 -->
           <div class="section-title">Differentiation</div>
           <div class="upgrade-grid">
             <button class="upg-card-mini full-row prestige-btn" @click="differentiate_bt">
@@ -114,7 +105,6 @@ made by frotrue
             </button>
           </div>
 
-          <!-- 미분 업그레이드 그리드 -->
           <div class="section-header">
             <div class="section-title">Derivative Upgrades</div>
             <button class="buy-max-btn" @click="buyMaxAllOtherUpgrades('ddx')">BUY MAX</button>
@@ -171,7 +161,42 @@ made by frotrue
           </div>
         </div>
 
-        <!-- 4. Stats 탭 -->
+        <!-- 4. Exponential 탭 (지수 함수 레이어) -->
+        <div v-if="activeTab === 'exp'" class="tab-pane">
+          <div class="exp-header-card">
+            <div class="label">EXPONENTIAL POWER (E)</div>
+            <div class="exp-resource-display">^{{ format(game.exp_multiplier) }}</div>
+            <div class="exp-desc">생산량 증폭: (f(x) + DX)^{{ format(game.exp_multiplier) }}</div>
+            <div class="exp-desc" style="margin-top: 5px; color: #ff79c6;">E = e^{{ format(game.exp_x) }}</div>
+          </div>
+
+          <div class="section-header">
+            <div class="section-title">Exponential Upgrades</div>
+            <button class="buy-max-btn" @click="buyMaxAllExpUpgrades()">BUY MAX</button>
+          </div>
+          <div class="upgrade-grid">
+            <button v-for="upg in game.exp_upgrades"
+                    :key="upg.id"
+                    class="upg-card-mini"
+                    :class="{
+                      'can-buy': game.fv.gte(upg.price),
+                      'locked': game.fv.lt(upg.price)
+                    }"
+                    @click="buyExpUpgrade(upg)"
+                    @contextmenu.prevent="buyMaxExpUpgrade(upg)">
+              <div class="upg-name">{{ upg.name }}</div>
+              <div class="upg-desc" v-if="upg.id === 0">Increase exp_x by 0.01</div>
+              <div class="upg-desc" v-if="upg.id === 1">Increase exp_x by 0.05</div>
+              <div class="upg-cost">
+                <span class="cost-val">{{ format(upg.price) }}</span>
+                <span class="cost-unit">FV</span>
+              </div>
+              <div class="upg-level">Lv.{{ upg.level }}</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. Stats 탭 -->
         <div v-if="activeTab === 'stats'" class="tab-pane">
           <div class="section-title">Statistics</div>
           <div class="stats-container">
@@ -202,29 +227,6 @@ made by frotrue
           </div>
         </div>
 
-        <!-- 4. Exponential 탭 (지수 함수 레이어) -->
-        <div v-if="activeTab === 'exp'" class="tab-pane">
-          <div class="exp-header-card">
-            <div class="label">EXPONENTIAL MULTIPLIER</div>
-            <div class="exp-resource-display">x1.00</div>
-            <div class="exp-desc">모든 FV 생산량을 지수적으로 강화합니다.</div>
-          </div>
-
-          <div class="section-title">Exponential Upgrades</div>
-          <div class="upgrade-grid">
-            <button class="upg-card-mini full-row"
-                    @click="console.log('Exponential upgrade clicked')">
-              <div class="upg-name">Evolution of e</div>
-              <div class="upg-desc">Increase multiplier by 2x</div>
-              <div class="upg-cost">
-                <span class="cost-val">1.00e100</span>
-                <span class="cost-unit">FV</span>
-              </div>
-              <div class="upg-level">Lv.0</div>
-            </button>
-          </div>
-        </div>
-
       </main>
     </div>
 
@@ -247,7 +249,6 @@ import Decimal from 'break_eternity.js'
 import CustomAlert from './components/CustomAlert.vue'
 
 const activeTab = ref('fx')
-const isTapping = ref(false)
 
 // 알림 상태 관리
 const alertState = reactive({
@@ -286,7 +287,7 @@ const tabs = [
 
 // 초기 게임 데이터 구조
 const game = reactive({
-  fv: new Decimal(10), // 초기 자원
+  fv: new Decimal(10),
   fx : [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)],
   fx_str: "1",
   current_x: new Decimal(0),
@@ -310,15 +311,22 @@ const game = reactive({
     2: { id: 0, name: 'Increase x in f\'(x)', price: new Decimal(10), type:'ddx',level: 0 },
     3: { id: 1, name: 'Decrease Auto Variable Interval', price: new Decimal(50), type:'ddx',level: 0 }
   },
-  prestige_x: new Decimal(1), // 미분 시 대입할 x값
-  dx_points: new Decimal(0),  // 미분 재화
-  dx_multiplier: new Decimal(0), // 미분 보너스 배수
-  differentiationCount: new Decimal(0), // 미분 횟수
+  prestige_x: new Decimal(1),
+  dx_points: new Decimal(0),
+  dx_multiplier: new Decimal(0),
+  differentiationCount: new Decimal(0),
   auto_upgrades: [
     { id: 0, name: 'Auto Variable', targetType: 'x_upgrades', interval: 10000, lastTick: 0, unlockedAt: 1, active: false },
     { id: 1, name: 'Auto FV Upgrades', targetType: 'other_upgrades_fx', interval: 2000, lastTick: 0, unlockedAt: 3, active: false },
     { id: 2, name: 'Auto DX Upgrades', targetType: 'other_upgrades_ddx', interval: 5000, lastTick: 0, unlockedAt: 5, active: false },
   ],
+  unlocked_exp: false,
+  exp_x: new Decimal(0),
+  exp_multiplier: new Decimal(1),
+  exp_upgrades: {
+    0: { id: 0, name: 'Evolution of e', price: new Decimal("1e30"), base_price: new Decimal("1e30"), type: 'exp', level: 0 },
+    1: { id: 1, name: 'Amplification', price: new Decimal("1e100"), base_price: new Decimal("1e100"), type: 'exp', level: 0 }
+  },
   stats: {
     total_fv: new Decimal(0),
     total_dx: new Decimal(0),
@@ -370,40 +378,38 @@ const differentiate = (equation, x) => {
     while (temp_arr.length < equation.length) {
         temp_arr.push(new Decimal(0));
     }
-
-    if (x !== undefined) {
-        return equation_calc(temp_arr, x);
-    }
+    if (x !== undefined) return equation_calc(temp_arr, x);
     return temp_arr;
 }
-const differentiate_bt = () => { //made by gemini 3.0 pro
+
+const differentiate_bt = () => {
   if (game.fv.gte("1e10")) {
-    showConfirm("미분시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분시 f'("+game.prestige_x+") = "+format(differentiate(game.fx,game.prestige_x))+" 만큼의 DX를 얻습니다", () => {
+    showConfirm("미분 시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분 시 f'("+game.prestige_x+") = "+format(differentiate(game.fx,game.prestige_x))+" 만큼의 DX를 얻습니다", () => {
       let gain = differentiate(game.fx, game.prestige_x);
       game.dx_points = game.dx_points.plus(gain);
       game.dx_multiplier = game.dx_multiplier.plus(gain);
       game.differentiationCount = game.differentiationCount.plus(1);
 
-      // 주요 진행도 초기화
+      // 리셋 로직
       game.fv = new Decimal(10);
       game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
       game.current_x = new Decimal(0);
       game.max_x = new Decimal(1);
       game.x_increase = new Decimal(0.05);
 
-      // 업그레이드 레벨 일괄 초기화 (비효율적인 개별 대입 방지)
+      // 함수 업그레이드 리셋 (가격 포함)
       Object.values(game.x_upgrades).forEach(upg => {
         upg.level = 0;
-        // 만약 가격이 레벨에 따라 변한다면 여기서 가격도 초기화 로직을 넣을 수 있습니다.
+        upg.price = Decimal.pow(10, upg.id + 1);
       });
       
-      Object.values(game.other_upgrades).forEach(upg => {
-        upg.level = 0;
-      });
+      // FV 기타 업그레이드 리셋
+      game.other_upgrades[0].level = 0;
+      game.other_upgrades[0].price = new Decimal(1000);
+      game.other_upgrades[1].level = 0;
+      game.other_upgrades[1].price = new Decimal(100);
 
-      // UI 갱신
       makefx();
-      
       showAlert(`${format(gain)} DX 포인트를 획득했습니다!`);
     }, "미분 확인");
   } else {
@@ -415,20 +421,16 @@ const performAutoUpgrade = (auto) => {
   if (auto.targetType === 'x_upgrades') {
     Object.values(game.x_upgrades).reverse().forEach(upg => buyUpgrade(upg));
   } else if (auto.targetType === 'other_upgrades_fx') {
-    Object.values(game.other_upgrades).forEach(upg => {
-      if (upg.type === 'fx') buyOtherUpgrade(upg);
-    });
+    Object.values(game.other_upgrades).forEach(upg => { if (upg.type === 'fx') buyOtherUpgrade(upg); });
   } else if (auto.targetType === 'other_upgrades_ddx') {
-    Object.values(game.other_upgrades).forEach(upg => {
-      if (upg.type === 'ddx') buyOtherUpgrade(upg);
-    });
+    Object.values(game.other_upgrades).forEach(upg => { if (upg.type === 'ddx') buyOtherUpgrade(upg); });
   }
 }
 
 const autoTick = () => {
   const now = Date.now();
   game.auto_upgrades.forEach(auto => {
-    if (auto.active && game.differentiationCount >= auto.unlockedAt) {
+    if (auto.active && game.differentiationCount.gte(auto.unlockedAt)) {
       if (now - auto.lastTick >= auto.interval) {
         auto.lastTick = now;
         performAutoUpgrade(auto);
@@ -438,97 +440,61 @@ const autoTick = () => {
 }
 
 const buyMaxAllOtherUpgrades = (type) => {
-  while (true) {
-    let upgrades = Object.values(game.other_upgrades)
-      .filter(u => u.type === type && u.level !== "MAX");
-    
+  let attempts = 0;
+  while (attempts < 100) {
+    let upgrades = Object.values(game.other_upgrades).filter(u => u.type === type && u.level !== "MAX");
     if (upgrades.length === 0) break;
-    
-    // Find the cheapest upgrade
-    let cheapest = upgrades.reduce((prev, curr) => {
-      return new Decimal(curr.price).lt(new Decimal(prev.price)) ? curr : prev;
-    });
-    
-    // Try to buy it once
-    let price = new Decimal(cheapest.price);
-    let canAfford = false;
-    if (type === 'fx') {
-      canAfford = game.fv.gte(price);
-    } else if (type === 'ddx') {
-      canAfford = game.dx_points.gte(price);
-    }
-    
-    if (canAfford) {
-      buyOtherUpgrade(cheapest);
-    } else {
-      break;
-    }
+    let cheapest = upgrades.reduce((prev, curr) => new Decimal(curr.price).lt(new Decimal(prev.price)) ? curr : prev);
+    let canAfford = type === 'fx' ? game.fv.gte(cheapest.price) : game.dx_points.gte(cheapest.price);
+    if (canAfford) buyOtherUpgrade(cheapest);
+    else break;
+    attempts++;
   }
 }
 
 const buyMaxUpgrade = (upg) => {
-  let bought = false;
-  // x_upgrades의 경우 가격이 10레벨마다 바뀌므로 루프로 처리 (성능상 무리 없음)
-  while (game.fv.gte(upg.price)) {
-    buyUpgrade(upg);
-    bought = true;
-  }
-  return bought;
+  while (game.fv.gte(upg.price)) { buyUpgrade(upg); }
 }
 
 const buyMaxOtherUpgrade = (upg) => {
-  let bought = false;
   while (true) {
+    if (upg.level === "MAX") break;
     let price = new Decimal(upg.price);
-    if (upg.type === 'fx') {
-      if (game.fv.lt(price) || upg.level === "MAX") break;
-      buyOtherUpgrade(upg);
-      bought = true;
-    } else if (upg.type === 'ddx') {
-      if (game.dx_points.lt(price) || upg.level === "MAX") break;
-      buyOtherUpgrade(upg);
-      bought = true;
-    } else {
-      break;
-    }
+    if (upg.type === 'fx' && game.fv.gte(price)) buyOtherUpgrade(upg);
+    else if (upg.type === 'ddx' && game.dx_points.gte(price)) buyOtherUpgrade(upg);
+    else break;
   }
-  return bought;
 }
 
 const manualTick = () => {
-  // 1. 이론적 초당 생산량 계산 (Theoretical FV/sec)
-  // Gain per cycle = f(max_x) + dx_multiplier
-  const gainPerCycle = equation_calc(game.fx, game.max_x).plus(game.dx_multiplier);
-  // Cycles per tick = x_increase / max_x
+  // 0. 해금 로직
+  if (!game.unlocked_exp && game.fv.gte("1e30")) {
+    game.unlocked_exp = true;
+    showAlert("지수 함수가 해금되었습니다! Exponential 탭을 확인하세요.");
+  }
+
+  // 1. 생산량 계산 ( (f(x) + DX) ^ E )
+  let baseGain = equation_calc(game.fx, game.max_x).plus(game.dx_multiplier);
+  if (baseGain.lt(1)) baseGain = new Decimal(1); 
+  
+  const gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
   const cyclesPerTick = game.x_increase.div(game.max_x);
-  // FV per sec = Gain * (Cycles per tick) * 10 (since 1 tick = 0.1s)
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
 
-  // 2. 실제 자원 획득 처리
+  // 2. 실제 자원 획득
   if (game.x_increase.gte(game.max_x)) {
-    // x_increase가 max_x를 초과할 경우: 즉시 1회분 지급 후 게이지 초기화
     game.fv = game.fv.plus(gainPerCycle);
     game.stats.total_fv = game.stats.total_fv.plus(gainPerCycle);
-    
-    // x_increase 스탯은 유지하고 게이지만 초기화
     game.current_x = new Decimal(0);
   } else {
-    // 일반적인 상황: x가 서서히 차오름
     game.current_x = game.current_x.plus(game.x_increase);
-    
     if (game.current_x.gte(game.max_x)) {
-      // max_x에 도달하면 1회분 지급
       game.fv = game.fv.plus(gainPerCycle);
       game.stats.total_fv = game.stats.total_fv.plus(gainPerCycle);
-      
-      // 초과분 상관없이 0으로 초기화
       game.current_x = new Decimal(0);
     }
   }
-
-  // 플레이 시간 업데이트
   game.stats.play_time += 0.1;
-
   autoTick();
 }
 
@@ -536,86 +502,80 @@ const buyUpgrade = (upg) => {
   if (game.fv.gte(upg.price)) {
     game.fv = game.fv.minus(upg.price)
     upg.level++
-
     if (upg.type === 'add') {
       game.fx[upg.id] = game.fx[upg.id].plus(1)
-      if( upg.level %10 === 0){
+      if(upg.level % 10 === 0) {
         game.fx[upg.id] = game.fx[upg.id].times(1.5).floor()
         upg.price = upg.price.times(10).floor()
       }
       makefx()
-    } else if (upg.type === 'mul_max') {
-      game.max_x = game.max_x.times(upg.effect)
     }
   }
 }
+
 const buyOtherUpgrade = (upg) => {
   let price = new Decimal(upg.price);
-  if (upg.type ==='fx'){
-    if (game.fv.gte(upg.price)) {
-      game.fv = game.fv.minus(upg.price)
-      upg.level++
-
-      if (upg.id === 0) {
-        game.max_x = game.max_x.plus(1)
-        game.x_increase = game.x_increase.times(1.1)
-        upg.price = price.times(1.5).floor()
-        if( upg.level %10 === 0){
-          game.max_x = game.max_x.times(1.3)
-        }
-        if (game.other_upgrades["1"].level >=100){
-          game.x_increase = game.max_x
-        }
-      } else if (upg.id === 1) {
-        game.x_increase = game.x_increase.plus(0.01)
-        upg.price = price.times(1.6).floor()
-        if( upg.level %10 === 0){
-          game.x_increase = game.x_increase.times(1.3);
-        }
-        if (upg.level >= 100){
-          game.x_increase = game.max_x;
-          upg.level = "MAX";
-          upg.price = upg.price.plus("1e9999")
-        }
+  if (upg.type ==='fx' && game.fv.gte(price)){
+    game.fv = game.fv.minus(price);
+    upg.level++;
+    if (upg.id === 0) {
+      game.max_x = game.max_x.plus(1);
+      game.x_increase = game.x_increase.times(1.1);
+      upg.price = price.times(1.5).floor();
+    } else if (upg.id === 1) {
+      game.x_increase = game.x_increase.plus(0.01);
+      upg.price = price.times(1.6).floor();
+      if (upg.level >= 100) {
+        game.x_increase = game.max_x;
+        upg.level = "MAX";
+        upg.price = new Decimal("1e9999");
+      }
+    }
+  } else if (upg.type ==='ddx' && game.dx_points.gte(price)) {
+    game.dx_points = game.dx_points.minus(price);
+    upg.level++;
+    if (upg.id === 0) {
+      game.prestige_x = game.prestige_x.plus(1);
+      upg.price = price.times(2).floor();
+    } else if (upg.id === 1) {
+      if (game.auto_upgrades[0].interval > 100) {
+        game.auto_upgrades[0].interval *= 0.8;
+        upg.price = price.times(2).floor();
+      } else {
+        upg.level = "MAX";
+        upg.price = new Decimal("1e9999");
       }
     }
   }
-  else if (upg.type ==='ddx') {
-    if (game.dx_points.gte(upg.price)) {
-      game.dx_pointsㅎ = game.dx_points.minus(upg.price)
-      upg.level++
+}
 
-      if (upg.id === 0) {
-        game.prestige_x = game.prestige_x.plus(1)
-        upg.price = price.times(2).floor()
-        if (upg.level % 10 === 0) {
-          game.prestige_x = game.prestige_x.times(1.5)
-        }
-      } else if (upg.id === 1) {
-        if (game.auto_upgrades[0].interval > 100) {
-          game.auto_upgrades[0].interval = Math.max(100, game.auto_upgrades[0].interval * 0.8);
-          upg.price = price.times(2).floor();
-        } else {
-          upg.level = "MAX";
-          upg.price = new Decimal("1e9999");
-        }
-      }
-    }
+const buyExpUpgrade = (upg) => {
+  if (game.fv.gte(upg.price)) {
+    game.fv = game.fv.minus(upg.price);
+    upg.level++;
+    if (upg.id === 0) game.exp_x = game.exp_x.plus(0.01);
+    else if (upg.id === 1) game.exp_x = game.exp_x.plus(0.05);
+    upg.price = upg.base_price.times(Decimal.pow(10, upg.level)).floor();
+    game.exp_multiplier = Decimal.exp(game.exp_x);
   }
+}
+
+const buyMaxExpUpgrade = (upg) => {
+  while (game.fv.gte(upg.price)) { buyExpUpgrade(upg); }
+}
+
+const buyMaxAllExpUpgrades = () => {
+  Object.values(game.exp_upgrades).forEach(u => buyMaxExpUpgrade(u));
 }
 
 const saveGame = () => {
   localStorage.setItem('math_idle_save', JSON.stringify(game));
-  console.log("Game Saved");
 }
 
 const loadGame = () => {
   const saved = localStorage.getItem('math_idle_save');
   if (!saved) return;
-
   const data = JSON.parse(saved);
-
-  // 상위 레벨의 기본 속성들을 수동으로 복구 (Decimal 객체화)
   game.fv = new Decimal(data.fv || 10);
   game.current_x = new Decimal(data.current_x || 0);
   game.max_x = new Decimal(data.max_x || 1);
@@ -624,12 +584,10 @@ const loadGame = () => {
   game.dx_points = new Decimal(data.dx_points || 0);
   game.dx_multiplier = new Decimal(data.dx_multiplier || 0);
   game.differentiationCount = new Decimal(data.differentiationCount || 0);
-  
-  if (data.fx) {
-    game.fx = data.fx.map(val => new Decimal(val));
-  }
-
-  // x_upgrades 복구
+  game.unlocked_exp = data.unlocked_exp || false;
+  game.exp_x = new Decimal(data.exp_x || 0);
+  game.exp_multiplier = new Decimal(data.exp_multiplier || 1);
+  if (data.fx) game.fx = data.fx.map(val => new Decimal(val));
   if (data.x_upgrades) {
     for (let key in game.x_upgrades) {
       if (data.x_upgrades[key]) {
@@ -638,8 +596,6 @@ const loadGame = () => {
       }
     }
   }
-
-  // other_upgrades 복구
   if (data.other_upgrades) {
     for (let key in game.other_upgrades) {
       if (data.other_upgrades[key]) {
@@ -648,8 +604,14 @@ const loadGame = () => {
       }
     }
   }
-
-  // auto_upgrades 복구
+  if (data.exp_upgrades) {
+    for (let key in game.exp_upgrades) {
+      if (data.exp_upgrades[key]) {
+        game.exp_upgrades[key].level = data.exp_upgrades[key].level;
+        game.exp_upgrades[key].price = new Decimal(data.exp_upgrades[key].price);
+      }
+    }
+  }
   if (data.auto_upgrades) {
     data.auto_upgrades.forEach((savedAuto, index) => {
       if (game.auto_upgrades[index]) {
@@ -658,14 +620,6 @@ const loadGame = () => {
       }
     });
   }
-
-  // stats 복구
-  if (data.stats) {
-    game.stats.total_fv = new Decimal(data.stats.total_fv || 0);
-    game.stats.total_dx = new Decimal(data.stats.total_dx || 0);
-    game.stats.play_time = data.stats.play_time || 0;
-  }
-
   makefx();
 }
 
@@ -680,53 +634,17 @@ onMounted(() => {
   loadGame();
   makefx();
   setInterval(manualTick, 100);
-  setInterval(saveGame, 30000); // 30초 자동 저장
+  setInterval(saveGame, 30000);
 })
 </script>
 
 <style scoped>
-/* 기존 스타일 코드 유지 */
 @import url('https://webfontworld.github.io/gmarket/GmarketSans.css');
-
-#app, .app-wrapper {
-  /* 화면 전체를 채우되 내부 요소를 중앙으로 보냄 */
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  background-color: #050505;
-  min-height: 100vh;
-  width: 100%; /* 100vw 대신 100% 사용 */
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
-}
-
-.container {
-  /* 실제 게임 화면이 들어가는 곳 */
-  width: 100%;
-  max-width: 450px;
-  background-color: #0f0f11;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  gap: 20px;
-  min-height: 100vh;
-  box-sizing: border-box;
-}
-
-/* PC에서만 구분선을 보여주기 위해 미디어 쿼리 추가 */
-@media (min-width: 451px) {
-  .container {
-    border-left: 1px solid #2a2a2e;
-    border-right: 1px solid #2a2a2e;
-  }
-}
-.header-card {
-  background: linear-gradient(145deg, #1a1a1e, #141417); padding: 24px; border-radius: 20px; border: 1px solid #2a2a2e; text-align: center;
-}
+#app, .app-wrapper { display: flex; justify-content: center; align-items: flex-start; background-color: #050505; min-height: 100vh; width: 100%; margin: 0; padding: 0; overflow-x: hidden; }
+.container { width: 100%; max-width: 450px; background-color: #0f0f11; display: flex; flex-direction: column; padding: 16px; gap: 20px; min-height: 100vh; box-sizing: border-box; }
+@media (min-width: 451px) { .container { border-left: 1px solid #2a2a2e; border-right: 1px solid #2a2a2e; } }
+.header-card { background: linear-gradient(145deg, #1a1a1e, #141417); padding: 24px; border-radius: 20px; border: 1px solid #2a2a2e; text-align: center; }
 .resource-display { font-size: 2.8rem; color: #fff; margin: 10px 0; }
-.progress-container { height: 10px; background: #000; border-radius: 5px; position: relative; overflow: hidden; }
-.progress-bar { height: 100%; background: #5e81ac; transition: width 0.1s linear; }
 .tab-menu { display: flex; background: #1a1a1e; padding: 8px; border-radius: 15px; gap: 5px; }
 .tab-menu button { flex: 1; border: none; background: transparent; padding: 10px 0; border-radius: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .tab-menu button.active { background: #2a2a2e; }
@@ -739,72 +657,16 @@ onMounted(() => {
 .cost-val { color: #ebcb8b; font-weight: bold; font-size: 0.95rem; }
 .cost-unit { color: #666; font-size: 0.7rem; margin-left: 2px; }
 .upg-level { font-size: 0.7rem; color: #5e81ac; }
-.main-tap-btn { width: 100%; padding: 18px; border-radius: 15px; border: none; background: #5e81ac; color: white; font-family: inherit; cursor: pointer; margin-bottom: 10px; }
-.main-tap-btn.tapping { transform: scale(0.95); }
 .settings-group { display: flex; flex-direction: column; gap: 10px; }
 .sub-btn { padding: 15px; border-radius: 10px; border: 1px solid #333; background: #1a1a1e; color: white; cursor: pointer; font-family: inherit; }
 .sub-btn.danger { border-color: #bf616a; color: #bf616a; }
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-.section-title { margin-bottom: 0; }
-.buy-max-btn {
-  background: #2e3440;
-  border: 1px solid #4c566a;
-  color: #eceff4;
-  padding: 4px 12px;
-  border-radius: 8px;
-  font-size: 0.7rem;
-  font-family: inherit;
-  cursor: pointer;
-  transition: 0.2s;
-}
-.buy-max-btn:hover { background: #434c5e; border-color: #5e81ac; }
-
-.stats-container {
-  background: #16161a;
-  border: 1px solid #2a2a2e;
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-.stats-item {
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 1px solid #2a2a2e;
-  padding-bottom: 8px;
-}
-.stats-item:last-child { border-bottom: none; }
-.stats-label { color: #888; font-size: 0.9rem; }
-.stats-value { color: #fff; font-weight: bold; font-size: 0.9rem; }
-
-/* Exponential Tab Styles */
-.exp-header-card {
-  background: linear-gradient(145deg, #2e1a1e, #1a0f11);
-  padding: 24px;
-  border-radius: 20px;
-  border: 1px solid #4e2a2e;
-  text-align: center;
-  margin-bottom: 20px;
-}
-.exp-resource-display {
-  font-size: 2.2rem;
-  color: #ff79c6;
-  margin: 10px 0;
-  font-weight: bold;
-  text-shadow: 0 0 10px rgba(255, 121, 198, 0.3);
-}
-.exp-desc {
-  font-size: 0.8rem;
-  color: #a89984;
-}
-.full-row {
-  grid-column: 1 / -1;
-}
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.buy-max-btn { background: #2e3440; border: 1px solid #4c566a; color: #eceff4; padding: 4px 12px; border-radius: 8px; font-size: 0.7rem; cursor: pointer; }
+.stats-container { background: #16161a; border: 1px solid #2a2a2e; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+.stats-item { display: flex; justify-content: space-between; border-bottom: 1px solid #2a2a2e; padding-bottom: 8px; }
+.stats-value { color: #fff; font-weight: bold; }
+.exp-header-card { background: linear-gradient(145deg, #2e1a1e, #1a0f11); padding: 24px; border-radius: 20px; border: 1px solid #4e2a2e; text-align: center; margin-bottom: 20px; }
+.exp-resource-display { font-size: 2.2rem; color: #ff79c6; margin: 10px 0; font-weight: bold; text-shadow: 0 0 10px rgba(255, 121, 198, 0.3); }
+.exp-desc { font-size: 0.8rem; color: #a89984; }
+.full-row { grid-column: 1 / -1; }
 </style>
