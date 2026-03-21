@@ -2,7 +2,7 @@
 Limit Idle
 reference : gemini 3.0
 github : frotrue/limit-idle
-using tech : vue.js, break_infinity.js
+using tech : vue.js, break_eternity.js
 made by frotrue
 -->
 
