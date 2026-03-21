@@ -640,8 +640,31 @@ onMounted(() => {
 
 <style scoped>
 @import url('https://webfontworld.github.io/gmarket/GmarketSans.css');
-#app, .app-wrapper { display: flex; justify-content: center; align-items: flex-start; background-color: #050505; min-height: 100vh; width: 100%; margin: 0; padding: 0; overflow-x: hidden; }
-.container { width: 100%; max-width: 450px; background-color: #0f0f11; display: flex; flex-direction: column; padding: 16px; gap: 20px; min-height: 100vh; box-sizing: border-box; }
+#app, .app-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background-color: #050505;
+  /* dvh: 동적 뷰포트 높이 사용 (모바일 바 고려) */
+  min-height: 100dvh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+.container {
+  width: 100%;
+  max-width: 450px;
+  background-color: #0f0f11;
+  display: flex;
+  flex-direction: column;
+  /* 상단 노치 및 하단 바 영역 보호 */
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)) 16px;
+  gap: 20px;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
 @media (min-width: 451px) { .container { border-left: 1px solid #2a2a2e; border-right: 1px solid #2a2a2e; } }
 .header-card { background: linear-gradient(145deg, #1a1a1e, #141417); padding: 24px; border-radius: 20px; border: 1px solid #2a2a2e; text-align: center; }
 .resource-display { font-size: 2.8rem; color: #fff; margin: 10px 0; }
