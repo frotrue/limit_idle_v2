@@ -656,7 +656,7 @@ const resetGame = () => {
   }, "초기화 확인");
 }
 
-// 인앱 결제 초기화 로직
+// 인앱 결제 초기화 로직 수정
 const initStore = () => {
   const CdvPurchase = window.CdvPurchase;
   if (!CdvPurchase) {
@@ -664,38 +664,54 @@ const initStore = () => {
     return;
   }
 
-  const { store, ProductType, Platform } = CdvPurchase;
+  const { store, ProductType, Platform, LogLevel } = CdvPurchase;
 
-  // 상품 등록
-  store.register({
+  // 1. 디버그 로그 활성화 (에러 추적을 위해 필수)
+  store.verbosity = LogLevel.DEBUG;
+
+  // 2. 상품 등록 (반드시 initialize 이전에 수행)
+  store.register([{
     id: PRODUCT_2X_BOOST,
     type: ProductType.NON_CONSUMABLE,
     platform: Platform.GOOGLE_PLAY,
-  });
+  }]);
 
-  // 결제 승인 핸들러
+  // 3. 결제 승인 핸들러
   store.when().approved(transaction => {
     console.log("Transaction approved:", transaction);
+    // 서버가 없으므로 로컬에서 바로 검증 시작
     transaction.verify();
   });
 
-  // 결제 검증 완료 핸들러
-  store.when().verified(transaction => {
-    console.log("Transaction verified:", transaction);
-    transaction.finish();
+  // 4. 결제 검증 완료 핸들러
+  store.when().verified(receipt => {
+    console.log("Transaction verified:", receipt);
+
+    // 상품 지급 로직
     game.is_2x_boost_owned = true;
     saveGame();
+
+    // 중요: 소모성/비소모성 관계없이 finish를 호출해야 구글이 환불 처리하지 않음
+    receipt.finish();
     showAlert("영구 2배 부스트 구매가 완료되었습니다!");
   });
 
-  // 에러 처리 추가
-  store.error(err => {
-    console.error("Store Error:", err);
-    showAlert("결제 오류: " + err.message);
+  // 5. 상품 정보 업데이트 감시 (null 에러 방지용)
+  store.when(PRODUCT_2X_BOOST).updated(p => {
+    if (p.valid) {
+      console.log("상품 정보 로드 성공:", p.title, p.price);
+    }
   });
 
-  // 초기화 시작
-  store.initialize();
+  // 6. 에러 처리
+  store.error(err => {
+    console.error("Store Error:", err);
+    // 6777003 같은 에러 코드는 보통 상품 ID를 못 찾을 때 발생
+    showAlert(`결제 오류 (${err.code}): ${err.message}`);
+  });
+
+  // 7. 초기화 실행 (반드시 플랫폼을 배열로 전달)
+  store.initialize([Platform.GOOGLE_PLAY]);
 }
 
 const buyPermanentBoost = () => {
@@ -723,11 +739,18 @@ const buyPermanentBoost = () => {
 onMounted(() => {
   loadGame();
   makefx();
-  
-  // Capacitor에서는 deviceready 이벤트 이후에 플러그인 접근 가능
-  document.addEventListener('deviceready', () => {
+
+  const startStore = () => {
+    console.log("Starting IAP Store...");
     initStore();
-  }, false);
+  };
+
+  if (window.cordova) {
+    document.addEventListener('deviceready', startStore, false);
+  } else {
+    // 브라우저 테스트 환경 등에서는 실행 안 함
+    console.log("Not in a Cordova/Capacitor environment.");
+  }
 
   setInterval(manualTick, 100);
   setInterval(saveGame, 30000);
