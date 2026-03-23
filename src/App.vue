@@ -664,7 +664,17 @@ const initStore = () => {
     return;
   }
 
+
   const { store, ProductType, Platform, LogLevel } = CdvPurchase;
+  // initStore 함수 내부에 추가
+  store.ready(() => {
+    console.log("Store is ready. Checking product...");
+    const p = store.get(PRODUCT_2X_BOOST);
+    if (!p) {
+      // 상품이 없으면 강제로 스토어 정보를 다시 읽어옵니다.
+      store.update();
+    }
+  });
 
   // 1. 디버그 로그 활성화 (에러 추적을 위해 필수)
   store.verbosity = LogLevel.DEBUG;
