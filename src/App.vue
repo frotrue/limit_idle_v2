@@ -664,49 +664,34 @@ const initStore = () => {
     return;
   }
 
-
   const { store, ProductType, Platform, LogLevel } = CdvPurchase;
-  // initStore 함수 내부에 추가
-  store.ready(() => {
-    console.log("Store is ready. Checking product...");
-    const p = store.get(PRODUCT_2X_BOOST);
-    if (!p) {
-      // 상품이 없으면 강제로 스토어 정보를 다시 읽어옵니다.
-      store.update();
-    }
-  });
 
   // 1. 디버그 로그 활성화 (에러 추적을 위해 필수)
   store.verbosity = LogLevel.DEBUG;
 
-  // 2. 상품 등록 (반드시 initialize 이전에 수행)
+  // 2. 상품 등록
+  // 특정 플랫폼(GOOGLE_PLAY)을 명시하지 않으면 현재 구동 중인 플랫폼의 스토어에 자동으로 등록됩니다.
   store.register([{
     id: PRODUCT_2X_BOOST,
     type: ProductType.NON_CONSUMABLE,
-    platform: Platform.GOOGLE_PLAY,
   }]);
 
   // 3. 결제 승인 핸들러
   store.when().approved(transaction => {
     console.log("Transaction approved:", transaction);
-    // 서버가 없으므로 로컬에서 바로 검증 시작
     transaction.verify();
   });
 
   // 4. 결제 검증 완료 핸들러
   store.when().verified(receipt => {
     console.log("Transaction verified:", receipt);
-
-    // 상품 지급 로직
     game.is_2x_boost_owned = true;
     saveGame();
-
-    // 중요: 소모성/비소모성 관계없이 finish를 호출해야 구글이 환불 처리하지 않음
     receipt.finish();
     showAlert("영구 2배 부스트 구매가 완료되었습니다!");
   });
 
-  // 5. 상품 정보 업데이트 감시 (null 에러 방지용)
+  // 5. 상품 정보 업데이트 감시
   store.when(PRODUCT_2X_BOOST).updated(p => {
     if (p.valid) {
       console.log("상품 정보 로드 성공:", p.title, p.price);
@@ -716,12 +701,18 @@ const initStore = () => {
   // 6. 에러 처리
   store.error(err => {
     console.error("Store Error:", err);
-    // 6777003 같은 에러 코드는 보통 상품 ID를 못 찾을 때 발생
-    showAlert(`결제 오류 (${err.code}): ${err.message}`);
+    
+    // 6777003 (PRODUCT_NOT_AVAILABLE) 에러 발생 시 상세 안내
+    if (err.code === 6777003) {
+      showAlert(`결제 오류 (6777003): 해당 상품(${PRODUCT_2X_BOOST})을 스토어에서 찾을 수 없습니다.\n\n[확인 사항]\n1. 구글 플레이 콘솔에 상품 ID가 정확히 등록되어 있는지\n2. 상품 상태가 '활성'인지\n3. 테스트 계정이 올바르게 등록되었는지 확인해 주세요.`);
+    } else {
+      showAlert(`결제 오류 (${err.code}): ${err.message}`);
+    }
   });
 
-  // 7. 초기화 실행 (반드시 플랫폼을 배열로 전달)
-  store.initialize([Platform.GOOGLE_PLAY]);
+  // 7. 초기화 실행
+  // 플랫폼을 명시하지 않거나 현재 사용 가능한 모든 플랫폼을 초기화합니다.
+  store.initialize();
 }
 
 const buyPermanentBoost = () => {
