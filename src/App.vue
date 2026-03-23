@@ -483,6 +483,7 @@ const buyMaxOtherUpgrade = (upg) => {
     let price = new Decimal(upg.price);
     if (upg.type === 'fx' && game.fv.gte(price)) buyOtherUpgrade(upg);
     else if (upg.type === 'ddx' && game.dx_points.gte(price)) buyOtherUpgrade(upg);
+
     else break;
   }
 }
