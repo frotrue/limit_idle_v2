@@ -265,7 +265,7 @@ import { ref, reactive, onMounted } from 'vue'
 import Decimal from 'break_eternity.js'
 import CustomAlert from './components/CustomAlert.vue'
 
-const PRODUCT_2X_BOOST = 'fv_permanent_x2';
+const PRODUCT_2X_BOOST = 'fv-permanent-x2';
 
 const activeTab = ref('fx')
 
@@ -666,15 +666,24 @@ const initStore = () => {
 
   const { store, ProductType, Platform, LogLevel } = CdvPurchase;
 
-  // 1. 디버그 로그 활성화 (에러 추적을 위해 필수)
+  // 1. 디버그 로그 활성화
   store.verbosity = LogLevel.DEBUG;
 
   // 2. 상품 등록
-  // 특정 플랫폼(GOOGLE_PLAY)을 명시하지 않으면 현재 구동 중인 플랫폼의 스토어에 자동으로 등록됩니다.
   store.register([{
     id: PRODUCT_2X_BOOST,
     type: ProductType.NON_CONSUMABLE,
   }]);
+
+  // 스토어가 준비되었을 때의 동작
+  store.ready(() => {
+    console.log("Store is ready.");
+    const p = store.get(PRODUCT_2X_BOOST);
+    if (!p || !p.valid) {
+      console.log("상품이 없거나 유효하지 않음. 업데이트 시도...");
+      store.update(); // 정보를 다시 불러옴
+    }
+  });
 
   // 3. 결제 승인 핸들러
   store.when().approved(transaction => {
@@ -695,30 +704,29 @@ const initStore = () => {
   store.when(PRODUCT_2X_BOOST).updated(p => {
     if (p.valid) {
       console.log("상품 정보 로드 성공:", p.title, p.price);
+    } else {
+      console.warn("상품 정보 로드 실패 (invalid):", p);
     }
   });
 
   // 6. 에러 처리
   store.error(err => {
     console.error("Store Error:", err);
-    
-    // 6777003 (PRODUCT_NOT_AVAILABLE) 에러 발생 시 상세 안내
     if (err.code === 6777003) {
-      showAlert(`결제 오류 (6777003): 해당 상품(${PRODUCT_2X_BOOST})을 스토어에서 찾을 수 없습니다.\n\n[확인 사항]\n1. 구글 플레이 콘솔에 상품 ID가 정확히 등록되어 있는지\n2. 상품 상태가 '활성'인지\n3. 테스트 계정이 올바르게 등록되었는지 확인해 주세요.`);
+      showAlert(`결제 오류 (6777003): 해당 상품(${PRODUCT_2X_BOOST})을 스토어에서 찾을 수 없습니다. 콘솔의 상품 ID와 패키지 명을 확인하세요.`);
     } else {
       showAlert(`결제 오류 (${err.code}): ${err.message}`);
     }
   });
 
   // 7. 초기화 실행
-  // 플랫폼을 명시하지 않거나 현재 사용 가능한 모든 플랫폼을 초기화합니다.
   store.initialize();
 }
 
 const buyPermanentBoost = () => {
   const CdvPurchase = window.CdvPurchase;
   if (!CdvPurchase) {
-    showAlert("결제 플러그인을 찾을 수 없습니다. (CdvPurchase undefined)");
+    showAlert("결제 플러그인을 찾을 수 없습니다.");
     return;
   }
   
@@ -726,14 +734,26 @@ const buyPermanentBoost = () => {
   const product = store.get(PRODUCT_2X_BOOST);
   
   if (!product) {
-    showAlert("상품 정보를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
+    showAlert("상품 정보를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.\n(계속 발생 시 스토어 설정을 확인하세요)");
+    store.update(); // 수동 클릭 시에도 업데이트 트리거
     return;
   }
 
+  console.log("Product status:", {
+    id: product.id,
+    valid: product.valid,
+    canPurchase: product.canPurchase,
+    owned: product.owned
+  });
+
   if (product.canPurchase) {
     store.order(PRODUCT_2X_BOOST);
+  } else if (product.owned) {
+    showAlert("이미 구매한 상품입니다.");
+    game.is_2x_boost_owned = true;
+    saveGame();
   } else {
-    showAlert("현재 구매할 수 없는 상태입니다. (이미 구매했거나 상점 미연결)");
+    showAlert(`현재 구매할 수 없는 상태입니다. (상태: ${product.state})`);
   }
 }
 
