@@ -265,7 +265,7 @@ import { ref, reactive, onMounted } from 'vue'
 import Decimal from 'break_eternity.js'
 import CustomAlert from './components/CustomAlert.vue'
 
-const PRODUCT_2X_BOOST = 'fv_permanent_x2';
+const PRODUCT_2X_BOOST = 'fv-permanent-x2';
 
 const activeTab = ref('fx')
 
