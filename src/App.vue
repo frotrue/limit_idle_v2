@@ -657,7 +657,8 @@ const resetGame = () => {
 
 // 인앱 결제 초기화 로직
 const initStore = () => {
-  if (typeof CdvPurchase === 'undefined') {
+  const CdvPurchase = window.CdvPurchase;
+  if (!CdvPurchase) {
     console.warn("CdvPurchase is not defined. IAP will not work.");
     return;
   }
@@ -674,20 +675,22 @@ const initStore = () => {
   // 결제 승인 핸들러
   store.when().approved(transaction => {
     console.log("Transaction approved:", transaction);
-    // 로컬 환경이므로 즉시 검증 단계로 진행
     transaction.verify();
   });
 
   // 결제 검증 완료 핸들러
   store.when().verified(transaction => {
     console.log("Transaction verified:", transaction);
-    // 비소모성 상품이므로 finish() 호출하여 구글 측에 알림
     transaction.finish();
-    
-    // 구매 상태 반영 및 저장
     game.is_2x_boost_owned = true;
     saveGame();
     showAlert("영구 2배 부스트 구매가 완료되었습니다!");
+  });
+
+  // 에러 처리 추가
+  store.error(err => {
+    console.error("Store Error:", err);
+    showAlert("결제 오류: " + err.message);
   });
 
   // 초기화 시작
@@ -695,25 +698,36 @@ const initStore = () => {
 }
 
 const buyPermanentBoost = () => {
-  if (typeof CdvPurchase === 'undefined') {
-    showAlert("현재 환경에서는 결제 기능을 사용할 수 없습니다.");
+  const CdvPurchase = window.CdvPurchase;
+  if (!CdvPurchase) {
+    showAlert("결제 플러그인을 찾을 수 없습니다. (CdvPurchase undefined)");
     return;
   }
   
   const { store } = CdvPurchase;
   const product = store.get(PRODUCT_2X_BOOST);
   
-  if (product && product.canPurchase) {
+  if (!product) {
+    showAlert("상품 정보를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
+    return;
+  }
+
+  if (product.canPurchase) {
     store.order(PRODUCT_2X_BOOST);
   } else {
-    showAlert("상품 정보를 불러올 수 없거나 이미 구매하셨습니다.");
+    showAlert("현재 구매할 수 없는 상태입니다. (이미 구매했거나 상점 미연결)");
   }
 }
 
 onMounted(() => {
   loadGame();
   makefx();
-  initStore(); // IAP 초기화
+  
+  // Capacitor에서는 deviceready 이벤트 이후에 플러그인 접근 가능
+  document.addEventListener('deviceready', () => {
+    initStore();
+  }, false);
+
   setInterval(manualTick, 100);
   setInterval(saveGame, 30000);
 })
