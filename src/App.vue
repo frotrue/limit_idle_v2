@@ -196,7 +196,24 @@ made by frotrue
           </div>
         </div>
 
-        <!-- 5. Stats 탭 -->
+        <!-- 5. Shop 탭 -->
+        <div v-if="activeTab === 'shop'" class="tab-pane">
+          <div class="section-title">Shop</div>
+          <div class="upgrade-grid">
+            <div class="upg-card-mini full-row" :class="{ 'locked': game.is_2x_boost_owned }">
+              <div class="upg-name">Permanent 2x Boost</div>
+              <div class="upg-desc" style="font-size: 0.8rem; color: #aaa; margin: 5px 0;">영구적으로 f(x) 생산량이 2배 증가합니다.</div>
+              <button class="sub-btn" 
+                      :style="{ width: '100%', marginTop: '10px', backgroundColor: game.is_2x_boost_owned ? '#4c566a' : '#5e81ac' }"
+                      :disabled="game.is_2x_boost_owned"
+                      @click="buyPermanentBoost">
+                {{ game.is_2x_boost_owned ? '구매 완료 (적용 중)' : '구매하기 ($0.99)' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Stats 탭 -->
         <div v-if="activeTab === 'stats'" class="tab-pane">
           <div class="section-title">Statistics</div>
           <div class="stats-container">
@@ -248,6 +265,8 @@ import { ref, reactive, onMounted } from 'vue'
 import Decimal from 'break_eternity.js'
 import CustomAlert from './components/CustomAlert.vue'
 
+const PRODUCT_2X_BOOST = 'fv_permanent_x2';
+
 const activeTab = ref('fx')
 
 // 알림 상태 관리
@@ -281,6 +300,7 @@ const tabs = [
   { id: 'fdx', name: 'Derivative', icon: '📈' },
   { id: 'auto', name: 'Automation', icon: '🤖' },
   { id: 'exp', name: 'Exponential', icon: '🧬' },
+  { id: 'shop', name: 'Shop', icon: '🛒' },
   { id: 'stats', name: 'Stats', icon: '📝' },
   { id: 'settings', name: 'Settings', icon: '⚙️' }
 ]
@@ -333,7 +353,8 @@ const game = reactive({
     play_time: 0,
     session_start: Date.now(),
     fv_per_sec: new Decimal(0)
-  }
+  },
+  is_2x_boost_owned: false
 })
 
 const SUPERSCRIPT_MAP = {
@@ -477,6 +498,9 @@ const manualTick = () => {
   let baseGain = equation_calc(game.fx, game.max_x).plus(game.dx_multiplier);
   if (baseGain.lt(1)) baseGain = new Decimal(1); 
   
+  // 영구 부스트 적용
+  if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
+  
   const gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
   const cyclesPerTick = game.x_increase.div(game.max_x);
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
@@ -587,6 +611,7 @@ const loadGame = () => {
   game.unlocked_exp = data.unlocked_exp || false;
   game.exp_x = new Decimal(data.exp_x || 0);
   game.exp_multiplier = new Decimal(data.exp_multiplier || 1);
+  game.is_2x_boost_owned = data.is_2x_boost_owned || false;
   if (data.fx) game.fx = data.fx.map(val => new Decimal(val));
   if (data.x_upgrades) {
     for (let key in game.x_upgrades) {
@@ -630,9 +655,65 @@ const resetGame = () => {
   }, "초기화 확인");
 }
 
+// 인앱 결제 초기화 로직
+const initStore = () => {
+  if (typeof CdvPurchase === 'undefined') {
+    console.warn("CdvPurchase is not defined. IAP will not work.");
+    return;
+  }
+
+  const { store, ProductType, Platform } = CdvPurchase;
+
+  // 상품 등록
+  store.register({
+    id: PRODUCT_2X_BOOST,
+    type: ProductType.NON_CONSUMABLE,
+    platform: Platform.GOOGLE_PLAY,
+  });
+
+  // 결제 승인 핸들러
+  store.when().approved(transaction => {
+    console.log("Transaction approved:", transaction);
+    // 로컬 환경이므로 즉시 검증 단계로 진행
+    transaction.verify();
+  });
+
+  // 결제 검증 완료 핸들러
+  store.when().verified(transaction => {
+    console.log("Transaction verified:", transaction);
+    // 비소모성 상품이므로 finish() 호출하여 구글 측에 알림
+    transaction.finish();
+    
+    // 구매 상태 반영 및 저장
+    game.is_2x_boost_owned = true;
+    saveGame();
+    showAlert("영구 2배 부스트 구매가 완료되었습니다!");
+  });
+
+  // 초기화 시작
+  store.initialize();
+}
+
+const buyPermanentBoost = () => {
+  if (typeof CdvPurchase === 'undefined') {
+    showAlert("현재 환경에서는 결제 기능을 사용할 수 없습니다.");
+    return;
+  }
+  
+  const { store } = CdvPurchase;
+  const product = store.get(PRODUCT_2X_BOOST);
+  
+  if (product && product.canPurchase) {
+    store.order(PRODUCT_2X_BOOST);
+  } else {
+    showAlert("상품 정보를 불러올 수 없거나 이미 구매하셨습니다.");
+  }
+}
+
 onMounted(() => {
   loadGame();
   makefx();
+  initStore(); // IAP 초기화
   setInterval(manualTick, 100);
   setInterval(saveGame, 30000);
 })
