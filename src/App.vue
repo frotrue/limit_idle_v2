@@ -656,17 +656,16 @@ const resetGame = () => {
   }, "초기화 확인");
 }
 
-// 인앱 결제 초기화 로직 수정
 const initStore = () => {
   const CdvPurchase = window.CdvPurchase;
   if (!CdvPurchase) {
-    console.warn("CdvPurchase is not defined. IAP will not work.");
+    console.warn("CdvPurchase is not defined.");
     return;
   }
 
   const { store, ProductType, Platform, LogLevel } = CdvPurchase;
 
-  // 1. 디버그 로그 활성화
+  // 1. 디버그 로그 (개발 중에는 DEBUG, 배포 시에는 ERROR 권장)
   store.verbosity = LogLevel.DEBUG;
 
   // 2. 상품 등록
@@ -675,85 +674,71 @@ const initStore = () => {
     type: ProductType.NON_CONSUMABLE,
   }]);
 
-  // 스토어가 준비되었을 때의 동작
-  store.ready(() => {
-    console.log("Store is ready.");
-    const p = store.get(PRODUCT_2X_BOOST);
-    if (!p || !p.valid) {
-      console.log("상품이 없거나 유효하지 않음. 업데이트 시도...");
-      store.update(); // 정보를 다시 불러옴
-    }
-  });
-
-  // 3. 결제 승인 핸들러
+  // 3. 결제 승인 핸들러 (중요: 모든 트랜잭션의 입구)
   store.when().approved(transaction => {
     console.log("Transaction approved:", transaction);
+    // 검증 로직이 따로 없다면 바로 finish()를 해도 되지만,
+    // 정석은 verify() -> verified 단계에서 처리하는 것입니다.
     transaction.verify();
   });
 
-  // 4. 결제 검증 완료 핸들러
+  // 4. 검증 완료 및 아이템 지급
   store.when().verified(receipt => {
     console.log("Transaction verified:", receipt);
-    game.is_2x_boost_owned = true;
-    saveGame();
-    receipt.finish();
-    showAlert("영구 2배 부스트 구매가 완료되었습니다!");
+
+    // 구매한 상품이 우리가 찾는 부스트인지 확인
+    if (receipt.id === PRODUCT_2X_BOOST) {
+      game.is_2x_boost_owned = true;
+      saveGame();
+      showAlert("영구 2배 부스트 구매가 완료되었습니다!");
+    }
+
+    receipt.finish(); // 반드시 호출해서 트랜잭션을 닫아야 합니다.
   });
 
-  // 5. 상품 정보 업데이트 감시
-  store.when(PRODUCT_2X_BOOST).updated(p => {
-    if (p.valid) {
-      console.log("상품 정보 로드 성공:", p.title, p.price);
-    } else {
-      console.warn("상품 정보 로드 실패 (invalid):", p);
+  // 5. 상품 정보 로드 상태 감시 (이 부분이 빠지면 get() 결과가 계속 null일 수 있음)
+  store.when().updated(() => {
+    const p = store.get(PRODUCT_2X_BOOST);
+    if (p) {
+      console.log(`상품 상태 업데이트: ${p.id} [Valid: ${p.valid}, CanPurchase: ${p.canPurchase}]`);
     }
   });
 
   // 6. 에러 처리
   store.error(err => {
     console.error("Store Error:", err);
-    if (err.code === 6777003) {
-      showAlert(`결제 오류 (6777003): 해당 상품(${PRODUCT_2X_BOOST})을 스토어에서 찾을 수 없습니다. 콘솔의 상품 ID와 패키지 명을 확인하세요.`);
-    } else {
-      showAlert(`결제 오류 (${err.code}): ${err.message}`);
-    }
+    // 6777003은 보통 스토어 콘솔에 상품 ID가 등록되지 않았을 때 발생합니다.
   });
 
-  // 7. 초기화 실행
-  store.initialize();
+  // 7. 초기화 실행 (중요: 플랫폼을 배열 형태로 전달)
+  // Google Play와 App Store 모두 대응하도록 설정
+  store.initialize([
+    Platform.GOOGLE_PLAY,
+    Platform.APPLE_APPSTORE
+  ]).then(() => {
+    console.log("Store initialized successfully");
+  }).catch(err => {
+    console.error("Store initialization failed", err);
+  });
 }
 
 const buyPermanentBoost = () => {
-  const CdvPurchase = window.CdvPurchase;
-  if (!CdvPurchase) {
-    showAlert("결제 플러그인을 찾을 수 없습니다.");
-    return;
-  }
-  
-  const { store } = CdvPurchase;
+  const { store } = window.CdvPurchase;
   const product = store.get(PRODUCT_2X_BOOST);
-  
+
   if (!product) {
-    showAlert("상품 정보를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.\n(계속 발생 시 스토어 설정을 확인하세요)");
-    store.update(); // 수동 클릭 시에도 업데이트 트리거
+    showAlert("스토어와 연결 중입니다. 잠시 후 다시 시도해 주세요.");
+    store.update(); // 정보 강제 갱신 요청
     return;
   }
-
-  console.log("Product status:", {
-    id: product.id,
-    valid: product.valid,
-    canPurchase: product.canPurchase,
-    owned: product.owned
-  });
 
   if (product.canPurchase) {
-    store.order(PRODUCT_2X_BOOST);
+    // 최신 버전은 product 객체를 직접 넘기거나 id를 넘깁니다.
+    store.order(product);
   } else if (product.owned) {
     showAlert("이미 구매한 상품입니다.");
-    game.is_2x_boost_owned = true;
-    saveGame();
   } else {
-    showAlert(`현재 구매할 수 없는 상태입니다. (상태: ${product.state})`);
+    showAlert("현재 이 상품을 구매할 수 없습니다.");
   }
 }
 
