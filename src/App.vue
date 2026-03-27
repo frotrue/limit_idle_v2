@@ -417,10 +417,14 @@ onMounted(() => {
     initStore();
   };
 
-  if (window.cordova) {
-    document.addEventListener('deviceready', startStore, false);
+  if (window.cordova || window.Capacitor) {
+    if (window.cordova) {
+      document.addEventListener('deviceready', startStore, false);
+    } else {
+      // Capacitor 환경에서는 바로 실행 (또는 플러그인 로드 후)
+      startStore();
+    }
   } else {
-    // 브라우저 테스트 환경 등에서는 실행 안 함
     console.log("Not in a Cordova/Capacitor environment.");
   }
 
