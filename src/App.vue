@@ -400,15 +400,13 @@ const buyPermanentBoost = () => {
     return;
   }
 
-  // 먼저 첫 번째 ID(fv_permanent_x2)로 가져오고, 없거나 유효하지 않으면 대체 ID(fv-permanent-x2)로 시도
-  let product = store.get(PRODUCT_2X_BOOST);
+  const p1 = store.get(PRODUCT_2X_BOOST);
+  const p2 = store.get(PRODUCT_2X_BOOST_ALT);
 
-  if (!product || !product.valid) {
-    product = store.get(PRODUCT_2X_BOOST_ALT);
-  }
+  let product = (p1 && p1.canPurchase) ? p1 : (p2 && p2.canPurchase) ? p2 : (p1 || p2);
 
   if (!product) {
-    showAlert("스토어와 연결 중입니다. 잠시 후 다시 시도해 주세요.");
+    showAlert("스토어 상품 정보를 찾을 수 없습니다. 다시 시도해 주세요.");
     store.update(); // 정보 강제 갱신 요청
     return;
   }
@@ -424,7 +422,12 @@ const buyPermanentBoost = () => {
   } else if (product.owned) {
     showAlert("이미 구매한 상품입니다.");
   } else {
-    showAlert("현재 이 상품을 구매할 수 없습니다.");
+    let msg = "현재 이 앱(기기)에서는 스토어가 상품을 내려주지 않고 있습니다.\n\n";
+    if (p1) msg += `[${p1.id}] state: ${p1.state}\n`;
+    if (p2) msg += `[${p2.id}] state: ${p2.state}\n`;
+    msg += "\n(state가 invalid나 registered면 스토어 서버 측 거부 상태입니다. 테스트 트랙에서 다시 다운로드 해보세요.)";
+    showAlert(msg);
+    store.update();
   }
 }
 
