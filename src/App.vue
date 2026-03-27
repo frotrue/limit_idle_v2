@@ -273,6 +273,7 @@ import {
 } from './gameLogic.js'
 
 const PRODUCT_2X_BOOST = 'fv_permanent_x2';
+const PRODUCT_2X_BOOST_ALT = 'fv-permanent-x2';
 
 const activeTab = ref('fx')
 
@@ -336,6 +337,15 @@ const initStore = () => {
     id: PRODUCT_2X_BOOST,
     type: ProductType.NON_CONSUMABLE,
     platform: Platform.APPLE_APPSTORE
+  }, {
+    // Alternative ID for the same product
+    id: PRODUCT_2X_BOOST_ALT,
+    type: ProductType.NON_CONSUMABLE,
+    platform: Platform.GOOGLE_PLAY
+  }, {
+    id: PRODUCT_2X_BOOST_ALT,
+    type: ProductType.NON_CONSUMABLE,
+    platform: Platform.APPLE_APPSTORE
   }]);
 
   // 3. 결제 승인 핸들러
@@ -352,7 +362,7 @@ const initStore = () => {
 
   // 5. 상품 정보 로드 상태 감시 및 구매 확인
   store.when().productUpdated(product => {
-    if (product.id === PRODUCT_2X_BOOST) {
+    if (product.id === PRODUCT_2X_BOOST || product.id === PRODUCT_2X_BOOST_ALT) {
       console.log(`상품 상태 업데이트: ${product.id} [Valid: ${product.valid}, Owned: ${product.owned}]`);
       if (product.owned && !game.is_2x_boost_owned) {
         game.is_2x_boost_owned = true;
@@ -390,7 +400,12 @@ const buyPermanentBoost = () => {
     return;
   }
 
-  const product = store.get(PRODUCT_2X_BOOST);
+  // 먼저 첫 번째 ID(fv_permanent_x2)로 가져오고, 없거나 유효하지 않으면 대체 ID(fv-permanent-x2)로 시도
+  let product = store.get(PRODUCT_2X_BOOST);
+
+  if (!product || !product.valid) {
+    product = store.get(PRODUCT_2X_BOOST_ALT);
+  }
 
   if (!product) {
     showAlert("스토어와 연결 중입니다. 잠시 후 다시 시도해 주세요.");
@@ -400,7 +415,12 @@ const buyPermanentBoost = () => {
 
   if (product.canPurchase) {
     // 상품 객체 대신 명시적으로 상품의 ID를 넘기거나, v13+의 경우 offer를 통해 구매를 진행합니다.
-    store.order(product.id || PRODUCT_2X_BOOST);
+    const offer = product.getOffer ? product.getOffer() : null;
+    if (offer) {
+      store.order(offer);
+    } else {
+      store.order(product.id); // product.id를 사용하도록 수정
+    }
   } else if (product.owned) {
     showAlert("이미 구매한 상품입니다.");
   } else {
