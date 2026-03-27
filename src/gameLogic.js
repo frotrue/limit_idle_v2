@@ -50,8 +50,8 @@ export const game = reactive({
   exp_x: new Decimal(0),
   exp_multiplier: new Decimal(1),
   exp_upgrades: {
-    0: { id: 0, name: 'Evolution of e', price: new Decimal("1e30"), base_price: new Decimal("1e30"), type: 'exp', level: 0 },
-    1: { id: 1, name: 'Amplification', price: new Decimal("1e100"), base_price: new Decimal("1e100"), type: 'exp', level: 0 }
+    0: { id: 0, name: 'Evolution of e', price: new Decimal("1e24"), base_price: new Decimal("1e24"), type: 'exp', level: 0 },
+    1: { id: 1, name: 'Amplification', price: new Decimal("1e35"), base_price: new Decimal("1e35"), type: 'exp', level: 0 }
   },
   stats: {
     total_fv: new Decimal(0),
@@ -60,7 +60,8 @@ export const game = reactive({
     session_start: Date.now(),
     fv_per_sec: new Decimal(0)
   },
-  is_2x_boost_owned: false
+  is_2x_boost_owned: false,
+  lastTick: Date.now()
 });
 
 export const makefx = () => {
@@ -145,7 +146,7 @@ export const buyUpgrade = (upg) => {
     if (upg.type === 'add') {
       game.fx[upg.id] = game.fx[upg.id].plus(1);
       if(upg.level % 10 === 0) {
-        game.fx[upg.id] = game.fx[upg.id].times(1.5).floor();
+        game.fx[upg.id] = game.fx[upg.id].times(2.5).floor();
         upg.price = upg.price.times(10).floor();
       }
       makefx();
@@ -161,7 +162,7 @@ export const buyOtherUpgrade = (upg) => {
     if (upg.id === 0) {
       game.max_x = game.max_x.plus(1);
       game.x_increase = game.x_increase.times(1.1);
-      upg.price = price.times(1.5).floor();
+      upg.price = price.times(1.4).floor();
     } else if (upg.id === 1) {
       game.x_increase = game.x_increase.plus(0.01);
       upg.price = price.times(1.6).floor();
@@ -175,8 +176,8 @@ export const buyOtherUpgrade = (upg) => {
     game.dx_points = game.dx_points.minus(price);
     upg.level++;
     if (upg.id === 0) {
-      game.prestige_x = game.prestige_x.plus(1);
-      upg.price = price.times(2).floor();
+      game.prestige_x = game.prestige_x.plus(2);
+      upg.price = price.times(1.5).floor();
     } else if (upg.id === 1) {
       if (game.auto_upgrades[0].interval > 100) {
         game.auto_upgrades[0].interval *= 0.8;
@@ -258,7 +259,7 @@ export const autoTick = () => {
 };
 
 export const manualTick = () => {
-  if (!game.unlocked_exp && game.fv.gte("1e30")) {
+  if (!game.unlocked_exp && game.fv.gte("1e24")) {
     game.unlocked_exp = true;
     showAlertFn("지수 함수가 해금되었습니다! Exponential 탭을 확인하세요.", '알림');
   }
@@ -289,6 +290,7 @@ export const manualTick = () => {
 };
 
 export const saveGame = () => {
+  game.lastTick = Date.now();
   localStorage.setItem('math_idle_save', JSON.stringify(game));
 };
 
@@ -329,7 +331,10 @@ export const loadGame = () => {
     for (let key in game.exp_upgrades) {
       if (data.exp_upgrades[key]) {
         game.exp_upgrades[key].level = data.exp_upgrades[key].level;
-        game.exp_upgrades[key].price = new Decimal(data.exp_upgrades[key].price);
+        // 기존 세이브 파일을 불러올 때 레벨이 0이면 새로운 해금 가격(1e24)으로 적용되도록 수정
+        if (data.exp_upgrades[key].level > 0) {
+          game.exp_upgrades[key].price = new Decimal(data.exp_upgrades[key].price);
+        }
       }
     }
   }
@@ -342,6 +347,35 @@ export const loadGame = () => {
     });
   }
   makefx();
+
+  // 오프라인 보상(Offline Progress) 계산 로직
+  if (data.lastTick) {
+    const now = Date.now();
+    const offlineMs = now - data.lastTick;
+    
+    // 1분(60초) 이상 오프라인 시 보상 지급
+    if (offlineMs > 30000) {
+      let baseGain = equation_calc(game.fx, game.max_x).plus(game.dx_multiplier);
+      if (baseGain.lt(1)) baseGain = new Decimal(1); 
+      if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
+      
+      const gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
+      const cyclesPerTick = game.x_increase.div(game.max_x);
+      const fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10); // 초당 10틱
+      
+      const offlineSecs = offlineMs / 1000;
+      const totalOfflineGain = fv_per_sec.times(offlineSecs);
+      
+      game.fv = game.fv.plus(totalOfflineGain);
+      game.stats.total_fv = game.stats.total_fv.plus(totalOfflineGain);
+      
+      // UI 준비 완료 후 띄우기 위해 1초(1000ms) 뒤 Custom Alert 표시
+      setTimeout(() => {
+        showAlertFn(`방치 환영합니다!\n${offlineSecs.toFixed(0)}초 동안 오프라인 생산으로\n${format(totalOfflineGain)} FV를 획득했습니다.`, '오프라인 보상');
+      }, 1000);
+    }
+  }
+  game.lastTick = Date.now();
 };
 
 export const resetGame = () => {
