@@ -379,7 +379,17 @@ const initStore = () => {
 }
 
 const buyPermanentBoost = () => {
+  if (!window.CdvPurchase) {
+    showAlert("스토어를 사용할 수 없는 환경입니다.");
+    return;
+  }
+
   const { store } = window.CdvPurchase;
+  if (!store) {
+    showAlert("스토어가 초기화되지 않았습니다.");
+    return;
+  }
+
   const product = store.get(PRODUCT_2X_BOOST);
 
   if (!product) {
