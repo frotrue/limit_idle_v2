@@ -399,8 +399,8 @@ const buyPermanentBoost = () => {
   }
 
   if (product.canPurchase) {
-    // 최신 버전은 product 객체를 직접 넘기거나 id를 넘깁니다.
-    store.order(product);
+    // 상품 객체 대신 명시적으로 상품의 ID를 넘기거나, v13+의 경우 offer를 통해 구매를 진행합니다.
+    store.order(product.id || PRODUCT_2X_BOOST);
   } else if (product.owned) {
     showAlert("이미 구매한 상품입니다.");
   } else {
