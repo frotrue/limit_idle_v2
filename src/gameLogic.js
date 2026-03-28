@@ -26,10 +26,10 @@ export const game = reactive({
     3: { id: 3, name: 'Upgrade x³', price: new Decimal(10000), effect: 0.2, type: 'add', level: 0 },
     4: { id: 4, name: 'Upgrade x⁴', price: new Decimal(100000), effect: 0.2, type: 'add', level: 0 },
     5: { id: 5, name: 'Upgrade x⁵', price: new Decimal(1000000), effect: 0.2, type: 'add', level: 0 },
-    6: { id: 6, name: 'Upgrade x⁶', price: new Decimal(10000000), effect: 0.2, type: 'add', level: 0 },
-    7: { id: 7, name: 'Upgrade x⁷', price: new Decimal(100000000), effect: 0.2, type: 'add', level: 0 },
-    8: { id: 8, name: 'Upgrade x⁸', price: new Decimal(1000000000), effect: 0.2, type: 'add', level: 0 },
-    9: { id: 9, name: 'Upgrade x⁹', price: new Decimal(10000000000), effect: 0.2, type: 'add', level: 0 }
+    6: { id: 6, name: 'Upgrade x⁶', price: new Decimal(100000000), effect: 0.2, type: 'add', level: 0 },
+    7: { id: 7, name: 'Upgrade x⁷', price: new Decimal(10000000000), effect: 0.2, type: 'add', level: 0 },
+    8: { id: 8, name: 'Upgrade x⁸', price: new Decimal(1000000000000), effect: 0.2, type: 'add', level: 0 },
+    9: { id: 9, name: 'Upgrade x⁹', price: new Decimal(100000000000000), effect: 0.2, type: 'add', level: 0 }
   },
   other_upgrades: {
     0: { id: 0, name: 'Upgrade max x', price: new Decimal(1000), type: 'fx', level: 0 },
@@ -50,8 +50,8 @@ export const game = reactive({
   exp_x: new Decimal(0),
   exp_multiplier: new Decimal(1),
   exp_upgrades: {
-    0: { id: 0, name: 'Evolution of e', price: new Decimal("1e24"), base_price: new Decimal("1e24"), type: 'exp', level: 0 },
-    1: { id: 1, name: 'Amplification', price: new Decimal("1e35"), base_price: new Decimal("1e35"), type: 'exp', level: 0 }
+    0: { id: 0, name: 'Evolution of e', price: new Decimal("10000"), base_price: new Decimal("10000"), type: 'exp', level: 0 },
+    1: { id: 1, name: 'Amplification', price: new Decimal("100000"), base_price: new Decimal("100000"), type: 'exp', level: 0 }
   },
   stats: {
     total_fv: new Decimal(0),
@@ -145,10 +145,26 @@ export const buyUpgrade = (upg) => {
     upg.level++;
     if (upg.type === 'add') {
       game.fx[upg.id] = game.fx[upg.id].plus(1);
-      if(upg.level % 10 === 0) {
-        game.fx[upg.id] = game.fx[upg.id].times(2.5).floor();
-        upg.price = upg.price.times(10).floor();
+      
+      // 함수 업그레이드 밸런스 패치
+      // 초기 진행을 시원하게 하기 위해 초반(100레벨 이하)은 5레벨마다 1.5배, 10레벨마다 2배로 파격적 보너스
+      if (upg.level % 10 === 0) {
+        game.fx[upg.id] = game.fx[upg.id].times(2).floor();
+      } else if (upg.level % 5 === 0) {
+        game.fx[upg.id] = game.fx[upg.id].times(1.5).floor();
       }
+      
+      // 가격 스케일링: 초반에는 덜 오르게, 후반으로 갈수록 1.5배로 수렴되도록
+      // 10레벨 이하: 1.1배 / 50레벨 이하: 1.25배 / 그 이후: 1.5배
+      let multiplier = 1.5;
+      if (upg.level <= 10) {
+        multiplier = 1.1;
+      } else if (upg.level <= 50) {
+        multiplier = 1.25;
+      }
+      
+      upg.price = upg.price.times(multiplier).ceil();
+      
       makefx();
     }
   }
@@ -191,14 +207,54 @@ export const buyOtherUpgrade = (upg) => {
 };
 
 export const buyExpUpgrade = (upg) => {
-  if (game.fv.gte(upg.price)) {
-    game.fv = game.fv.minus(upg.price);
-    upg.level++;
-    if (upg.id === 0) game.exp_x = game.exp_x.plus(0.01);
-    else if (upg.id === 1) game.exp_x = game.exp_x.plus(0.05);
-    upg.price = upg.base_price.times(Decimal.pow(10, upg.level)).floor();
-    game.exp_multiplier = Decimal.exp(game.exp_x);
+  if (game.dx_points.gte(upg.price)) {
+    showConfirmFn(`[경고: 초월 진화]\n강력한 지수 효과를 얻는 대신, 미분 재화(DX)를 포함한 게임의 모든 진행도가 초기화됩니다.\n\n정말 진행하시겠습니까?`, () => {
+      upg.level++;
+      // 지수함수 밸런스 패치: 2차 환생(초월)이므로 효과를 다시 강화 (0.02, 0.05 배율)
+      if (upg.id === 0) game.exp_x = game.exp_x.plus(0.02);
+      else if (upg.id === 1) game.exp_x = game.exp_x.plus(0.05);
+      
+      upg.price = upg.base_price.times(Decimal.pow(10, upg.level)).floor();
+      game.exp_multiplier = Decimal.exp(game.exp_x);
+
+      performTier2Reset();
+      showAlertFn(`초월 진화가 완료되었습니다!\n이제 f(x)가 ${format(game.exp_multiplier)} 승수만큼 증폭됩니다.`, '초월 진화');
+    }, "초월 진화 확인");
   }
+};
+
+export const performTier2Reset = () => {
+  game.fv = new Decimal(10);
+  game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
+  game.current_x = new Decimal(0);
+  game.max_x = new Decimal(1);
+  game.x_increase = new Decimal(0.05);
+
+  Object.values(game.x_upgrades).forEach(upg => {
+    upg.level = 0;
+    upg.price = Decimal.pow(10, upg.id + 1);
+  });
+  
+  game.other_upgrades[0].level = 0;
+  game.other_upgrades[0].price = new Decimal(1000);
+  game.other_upgrades[1].level = 0;
+  game.other_upgrades[1].price = new Decimal(100);
+  game.other_upgrades[2].level = 0;
+  game.other_upgrades[2].price = new Decimal(10);
+  game.other_upgrades[3].level = 0;
+  game.other_upgrades[3].price = new Decimal(50);
+
+  game.dx_points = new Decimal(0);
+  game.dx_multiplier = new Decimal(0);
+  game.differentiationCount = new Decimal(0);
+  game.prestige_x = new Decimal(1);
+
+  game.auto_upgrades[0].interval = 10000;
+  game.auto_upgrades[1].interval = 2000;
+  game.auto_upgrades[2].interval = 5000;
+
+  makefx();
+  saveGame()
 };
 
 export const buyMaxUpgrade = (upg) => {
@@ -215,10 +271,6 @@ export const buyMaxOtherUpgrade = (upg) => {
   }
 };
 
-export const buyMaxExpUpgrade = (upg) => {
-  while (game.fv.gte(upg.price)) { buyExpUpgrade(upg); }
-};
-
 export const buyMaxAllOtherUpgrades = (type) => {
   let attempts = 0;
   while (attempts < 100) {
@@ -230,10 +282,6 @@ export const buyMaxAllOtherUpgrades = (type) => {
     else break;
     attempts++;
   }
-};
-
-export const buyMaxAllExpUpgrades = () => {
-  Object.values(game.exp_upgrades).forEach(u => buyMaxExpUpgrade(u));
 };
 
 export const performAutoUpgrade = (auto) => {
@@ -259,7 +307,7 @@ export const autoTick = () => {
 };
 
 export const manualTick = () => {
-  if (!game.unlocked_exp && game.fv.gte("1e24")) {
+  if (!game.unlocked_exp && (game.dx_points.gte(10000) || game.fv.gte("1e24"))) {
     game.unlocked_exp = true;
     showAlertFn("지수 함수가 해금되었습니다! Exponential 탭을 확인하세요.", '알림');
   }
@@ -329,12 +377,10 @@ export const loadGame = () => {
   }
   if (data.exp_upgrades) {
     for (let key in game.exp_upgrades) {
-      if (data.exp_upgrades[key]) {
-        game.exp_upgrades[key].level = data.exp_upgrades[key].level;
-        // 기존 세이브 파일을 불러올 때 레벨이 0이면 새로운 해금 가격(1e24)으로 적용되도록 수정
-        if (data.exp_upgrades[key].level > 0) {
-          game.exp_upgrades[key].price = new Decimal(data.exp_upgrades[key].price);
-        }
+      if (data.exp_upgrades[key] && game.exp_upgrades[key]) {
+        game.exp_upgrades[key].level = data.exp_upgrades[key].level || 0;
+        // 기존 FV(1e24) 세이브와 호환이 안되므로, DX 기반의 기본 가격(base_price)에 맞춰 가격을 강제 재설정
+        game.exp_upgrades[key].price = game.exp_upgrades[key].base_price.times(Decimal.pow(10, game.exp_upgrades[key].level)).floor();
       }
     }
   }
@@ -384,4 +430,5 @@ export const resetGame = () => {
     location.reload();
   }, "초기화 확인");
 };
+
 

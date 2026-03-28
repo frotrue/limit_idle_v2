@@ -172,24 +172,22 @@ made by frotrue
 
           <div class="section-header">
             <div class="section-title">Exponential Upgrades</div>
-            <button class="buy-max-btn" @click="buyMaxAllExpUpgrades()">BUY MAX</button>
           </div>
           <div class="upgrade-grid">
             <button v-for="upg in game.exp_upgrades"
                     :key="upg.id"
                     class="upg-card-mini"
                     :class="{
-                      'can-buy': game.fv.gte(upg.price),
-                      'locked': game.fv.lt(upg.price)
+                      'can-buy': game.dx_points.gte(upg.price),
+                      'locked': game.dx_points.lt(upg.price)
                     }"
-                    @click="buyExpUpgrade(upg)"
-                    @contextmenu.prevent="buyMaxExpUpgrade(upg)">
+                    @click="buyExpUpgrade(upg)">
               <div class="upg-name">{{ upg.name }}</div>
-              <div class="upg-desc" v-if="upg.id === 0">Increase exp_x by 0.01</div>
-              <div class="upg-desc" v-if="upg.id === 1">Increase exp_x by 0.05</div>
+              <div class="upg-desc" v-if="upg.id === 0">Increase exp_x by 0.02 <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
+              <div class="upg-desc" v-if="upg.id === 1">Increase exp_x by 0.05 <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
               <div class="upg-cost">
                 <span class="cost-val">{{ format(upg.price) }}</span>
-                <span class="cost-unit">FV</span>
+                <span class="cost-unit">DX</span>
               </div>
               <div class="upg-level">Lv.{{ upg.level }}</div>
             </button>
@@ -267,8 +265,8 @@ import CustomAlert from './components/CustomAlert.vue'
 import {
   game, format, makefx, differentiate_bt,
   buyUpgrade, buyOtherUpgrade, buyExpUpgrade,
-  buyMaxUpgrade, buyMaxOtherUpgrade, buyMaxExpUpgrade,
-  buyMaxAllOtherUpgrades, buyMaxAllExpUpgrades,
+  buyMaxUpgrade, buyMaxOtherUpgrade,
+  buyMaxAllOtherUpgrades,
   setAlertCallbacks, manualTick, saveGame, loadGame, resetGame
 } from './gameLogic.js'
 
