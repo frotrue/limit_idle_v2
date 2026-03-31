@@ -3,7 +3,7 @@ import Decimal from 'break_eternity.js';
 
 export const SUPERSCRIPT_MAP = {
   0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴',
-  5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹',
+  5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸' ,9: '⁹',
 };
 
 export const format = (num) => {
@@ -74,7 +74,14 @@ export const makefx = () => {
       else parts.push(`${valStr}x${SUPERSCRIPT_MAP[i]}`);
     }
   }
-  game.fx_str = parts.join(" + ") || "0";
+  let base_str = parts.join(" + ") || "0";
+  if (game.dx_multiplier.gt(0)) {
+    // 1 + dx_multiplier/100 형태의 배율을 시각적으로 f(x)에 곱해줌
+    const dx_bonus_percent = game.dx_multiplier.div(100).plus(1);
+    game.fx_str = `( ${base_str} ) × ${format(dx_bonus_percent)}`;
+  } else {
+    game.fx_str = base_str;
+  }
 };
 
 export const equation_calc = (equation, x) => {
@@ -312,11 +319,18 @@ export const manualTick = () => {
     showAlertFn("지수 함수가 해금되었습니다! Exponential 탭을 확인하세요.", '알림');
   }
 
-  let baseGain = equation_calc(game.fx, game.max_x).plus(game.dx_multiplier);
+  // 기본 생산량: f(x) 결과값 * (1 + dx_multiplier/100) (배수 시스템으로 변경)
+  let baseGain = equation_calc(game.fx, game.max_x);
   if (baseGain.lt(1)) baseGain = new Decimal(1); 
+  
+  if (game.dx_multiplier.gt(0)) {
+    const dx_bonus = game.dx_multiplier.div(100).plus(1);
+    baseGain = baseGain.times(dx_bonus);
+  }
   
   if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
   
+  // 지수 효과 적용 (승수)
   const gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
   const cyclesPerTick = game.x_increase.div(game.max_x);
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
@@ -401,8 +415,14 @@ export const loadGame = () => {
     
     // 1분(60초) 이상 오프라인 시 보상 지급
     if (offlineMs > 30000) {
-      let baseGain = equation_calc(game.fx, game.max_x).plus(game.dx_multiplier);
+      let baseGain = equation_calc(game.fx, game.max_x);
       if (baseGain.lt(1)) baseGain = new Decimal(1); 
+      
+      if (game.dx_multiplier.gt(0)) {
+        const dx_bonus = game.dx_multiplier.div(100).plus(1);
+        baseGain = baseGain.times(dx_bonus);
+      }
+      
       if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
       
       const gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
