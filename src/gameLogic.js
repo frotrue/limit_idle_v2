@@ -185,7 +185,7 @@ export const buyOtherUpgrade = (upg) => {
     if (upg.id === 0) {
       game.max_x = game.max_x.plus(1);
       game.x_increase = game.x_increase.times(1.1);
-      upg.price = price.times(1.4).floor();
+      upg.price = price.times(1.6).floor();
     } else if (upg.id === 1) {
       game.x_increase = game.x_increase.plus(0.01);
       upg.price = price.times(1.6).floor();
