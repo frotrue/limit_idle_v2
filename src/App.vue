@@ -168,9 +168,6 @@ made by frotrue
             <div class="exp-resource-display">^{{ format(game.exp_multiplier) }}</div>
             <div class="exp-desc">생산량 증폭: (f(x) + DX)^{{ format(game.exp_multiplier) }}</div>
             <div class="exp-desc" style="margin-top: 5px; color: #ff79c6;">E = e^{{ format(game.exp_x) }}</div>
-            <div class="exp-desc" style="margin-top: 8px; color: #8fbcbb;">
-              다음 초월: T{{ getNextEvolutionTier() }} ({{ getTierResetScopeText(getNextEvolutionTier()) }})
-            </div>
           </div>
 
           <div class="section-header">
@@ -186,11 +183,8 @@ made by frotrue
                     }"
                     @click="buyExpUpgrade(upg)">
               <div class="upg-name">{{ upg.name }}</div>
-              <div class="upg-desc">
-                Increase exp_x by {{ getTierExpGain(getNextEvolutionTier()) }}
-                <br>
-                <span style="color:#bf616a; font-size:0.7em;">(티어별 리셋 범위 적용)</span>
-              </div>
+              <div class="upg-desc" v-if="upg.id === 0">Increase exp_x by 0.02 <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
+              <div class="upg-desc" v-if="upg.id === 1">Increase exp_x by 0.05 <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
               <div class="upg-cost">
                 <span class="cost-val">{{ format(upg.price) }}</span>
                 <span class="cost-unit">DX</span>
@@ -273,7 +267,6 @@ import {
   buyUpgrade, buyOtherUpgrade, buyExpUpgrade,
   buyMaxUpgrade, buyMaxOtherUpgrade,
   buyMaxAllOtherUpgrades,
-  getNextEvolutionTier, getTierResetScopeText,
   setAlertCallbacks, manualTick, saveGame, loadGame, resetGame
 } from './gameLogic.js'
 
@@ -320,12 +313,6 @@ const tabs = [
   { id: 'stats', name: 'Stats', icon: '📝' },
   { id: 'settings', name: 'Settings', icon: '⚙️' }
 ]
-
-const getTierExpGain = (tier) => {
-  if (tier === 1) return '0.02'
-  if (tier === 2) return '0.05'
-  return '0.08'
-}
 
 const initStore = () => {
   const CdvPurchase = window.CdvPurchase;

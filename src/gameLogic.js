@@ -49,13 +49,15 @@ export const game = reactive({
   unlocked_exp: false,
   exp_x: new Decimal(0),
   exp_multiplier: new Decimal(1),
-  tier2_rebirth_count: new Decimal(0),
-  tier2_best_dx: new Decimal(0),
-  last_tier2_used: 0,
-  save_version: 2,
   exp_upgrades: {
     0: { id: 0, name: 'Evolution of e', price: new Decimal("10000"), base_price: new Decimal("10000"), type: 'exp', level: 0 },
     1: { id: 1, name: 'Amplification', price: new Decimal("100000"), base_price: new Decimal("100000"), type: 'exp', level: 0 }
+  },
+  unlocked_integral: false,
+  integral_c: new Decimal(0),
+  integral_upgrades: {
+    0: { id: 0, name: 'Higher Dimension (x¹⁰+)', price: new Decimal("10"), base_price: new Decimal("10"), type: 'integral', level: 0 },
+    1: { id: 1, name: 'Time Accumulation', price: new Decimal("50"), base_price: new Decimal("50"), type: 'integral', level: 0 }
   },
   stats: {
     total_fv: new Decimal(0),
@@ -110,21 +112,19 @@ export const differentiate = (equation, x) => {
   return temp_arr;
 };
 
+export const integrate_calc = (equation, x) => {
+  let total = new Decimal(0);
+  for (let i = 0; i < equation.length; i++) {
+    if (equation[i].eq(0)) continue;
+    // $\int c * x^i dx = \frac{c}{i+1} x^{i+1}$
+    let term = equation[i].div(i + 1).times(Decimal.pow(x, i + 1));
+    total = total.plus(term);
+  }
+  return total;
+};
+
 let showAlertFn = (msg, title) => console.log(title, msg);
 let showConfirmFn = (msg, onConfirm, title) => { if(confirm(msg)) onConfirm(); };
-
-export const getNextEvolutionTier = () => {
-  const nextCount = new Decimal(game.tier2_rebirth_count || 0).plus(1);
-  if (nextCount.gte(3)) return 3;
-  if (nextCount.gte(2)) return 2;
-  return 1;
-};
-
-export const getTierResetScopeText = (tier) => {
-  if (tier >= 3) return '미분/자동화 업그레이드 유지';
-  if (tier >= 2) return '미분 업그레이드 유지';
-  return '미분 업그레이드 초기화';
-};
 
 export const setAlertCallbacks = (alertCb, confirmCb) => {
   showAlertFn = alertCb;
@@ -232,40 +232,22 @@ export const buyOtherUpgrade = (upg) => {
 
 export const buyExpUpgrade = (upg) => {
   if (game.dx_points.gte(upg.price)) {
-    const tier = getNextEvolutionTier();
-    showConfirmFn(`[경고: 초월 진화 T${tier}]\n강력한 지수 효과를 얻지만 DX는 초기화됩니다.\n리셋 범위: ${getTierResetScopeText(tier)}\n\n정말 진행하시겠습니까?`, () => {
-      if (game.dx_points.gt(game.tier2_best_dx)) {
-        game.tier2_best_dx = new Decimal(game.dx_points);
-      }
-
+    showConfirmFn(`[경고: 초월 진화]\n강력한 지수 효과를 얻는 대신, 미분 재화(DX)를 포함한 게임의 모든 진행도가 초기화됩니다.\n\n정말 진행하시겠습니까?`, () => {
       upg.level++;
-      // 티어가 높을수록 exp_x 증가량을 강화
-      if (tier === 1) game.exp_x = game.exp_x.plus(0.02);
-      else if (tier === 2) game.exp_x = game.exp_x.plus(0.05);
-      else game.exp_x = game.exp_x.plus(0.08);
+      // 지수함수 밸런스 패치: 2차 환생(초월)이므로 효과를 다시 강화 (0.02, 0.05 배율)
+      if (upg.id === 0) game.exp_x = game.exp_x.plus(0.02);
+      else if (upg.id === 1) game.exp_x = game.exp_x.plus(0.05);
       
       upg.price = upg.base_price.times(Decimal.pow(10, upg.level)).floor();
       game.exp_multiplier = Decimal.exp(game.exp_x);
-      game.last_tier2_used = tier;
-      game.tier2_rebirth_count = game.tier2_rebirth_count.plus(1);
 
-      performTier2Reset(tier);
-      showAlertFn(`T${tier} 초월 진화가 완료되었습니다!\n이제 f(x)가 ${format(game.exp_multiplier)} 승수만큼 증폭됩니다.`, '초월 진화');
+      performTier2Reset();
+      showAlertFn(`초월 진화가 완료되었습니다!\n이제 f(x)가 ${format(game.exp_multiplier)} 승수만큼 증폭됩니다.`, '초월 진화');
     }, "초월 진화 확인");
   }
 };
 
-export const performTier2Reset = (tier = 1) => {
-  const preservedDiffCount = new Decimal(game.differentiationCount);
-  const preservedDDX = {
-    prestige_x: new Decimal(game.prestige_x),
-    upg2_level: game.other_upgrades[2].level,
-    upg2_price: new Decimal(game.other_upgrades[2].price),
-    upg3_level: game.other_upgrades[3].level,
-    upg3_price: new Decimal(game.other_upgrades[3].price)
-  };
-  const preservedAutoIntervals = game.auto_upgrades.map(auto => auto.interval);
-
+export const performTier2Reset = () => {
   game.fv = new Decimal(10);
   game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
   game.current_x = new Decimal(0);
@@ -288,35 +270,49 @@ export const performTier2Reset = (tier = 1) => {
 
   game.dx_points = new Decimal(0);
   game.dx_multiplier = new Decimal(0);
-  game.differentiationCount = preservedDiffCount;
+  game.differentiationCount = new Decimal(0);
+  game.prestige_x = new Decimal(1);
 
-  if (tier >= 2) {
-    game.prestige_x = preservedDDX.prestige_x;
-    game.other_upgrades[2].level = preservedDDX.upg2_level;
-    game.other_upgrades[2].price = preservedDDX.upg2_price;
-    game.other_upgrades[3].level = preservedDDX.upg3_level;
-    game.other_upgrades[3].price = preservedDDX.upg3_price;
-  } else {
-    game.prestige_x = new Decimal(1);
-
-    game.other_upgrades[2].level = 0;
-    game.other_upgrades[2].price = new Decimal(10);
-    game.other_upgrades[3].level = 0;
-    game.other_upgrades[3].price = new Decimal(50);
-  }
-
-  if (tier >= 3) {
-    game.auto_upgrades[0].interval = preservedAutoIntervals[0];
-    game.auto_upgrades[1].interval = preservedAutoIntervals[1];
-    game.auto_upgrades[2].interval = preservedAutoIntervals[2];
-  } else {
-    game.auto_upgrades[0].interval = 10000;
-    game.auto_upgrades[1].interval = 2000;
-    game.auto_upgrades[2].interval = 5000;
-  }
+  game.auto_upgrades[0].interval = 10000;
+  game.auto_upgrades[1].interval = 2000;
+  game.auto_upgrades[2].interval = 5000;
 
   makefx();
   saveGame()
+};
+
+export const performTier3Reset = () => {
+  performTier2Reset(); // 1, 2차 초기화 내용 포함
+  
+  // 지수(Exp) 관련 추가 초기화
+  game.exp_x = new Decimal(0);
+  game.exp_multiplier = new Decimal(1);
+  
+  Object.values(game.exp_upgrades).forEach(upg => {
+    upg.level = 0;
+    upg.price = new Decimal(upg.base_price);
+  });
+  
+  saveGame();
+};
+
+export const integrate_bt = () => {
+  // 해금 조건: 지수 배율이 일정 수준 이상 도달했을 때 (밸런스 조절: 1e5 -> 2)
+  if (game.exp_multiplier.gte(2)) {
+    let raw_integral = integrate_calc(game.fx, game.max_x);
+    // 밸런스를 위해 로그값을 취하거나 일정 비율로 C (IX) 획득
+    let gain = raw_integral.pow(0.1).floor(); 
+    if (gain.lt(1)) gain = new Decimal(1);
+
+    showConfirmFn(`[경고: 적분 (3차 환생)]\n현재까지의 모든 f(x), 미분(DX), 지수(Exp)를 잃는 대신,\n정적분 영역에 비례한 영구 '적분 상수(C)' ${format(gain)} 를 얻습니다.\n\n정말 진행하시겠습니까?`, () => {
+      game.integral_c = game.integral_c.plus(gain);
+      
+      performTier3Reset();
+      showAlertFn(`적분 환생이 완료되었습니다!\n이제 모든 함수식 끝에 + ${format(game.integral_c)} 의 영구 상수가 추가됩니다.`, '적분 환생');
+    }, "적분 환생 확인");
+  } else {
+    showAlertFn("적분 환생을 하려면 최소 2.00 의 Exp 증폭이 필요합니다.", '알림');
+  }
 };
 
 export const buyMaxUpgrade = (upg) => {
@@ -373,9 +369,16 @@ export const manualTick = () => {
     game.unlocked_exp = true;
     showAlertFn("지수 함수가 해금되었습니다! Exponential 탭을 확인하세요.", '알림');
   }
+  
+  // 밸런스 조절: 1e5 -> 2
+  if (!game.unlocked_integral && game.exp_multiplier.gte(2)) {
+    game.unlocked_integral = true;
+    showAlertFn("적분 함수가 해금되었습니다! Integral 탭을 확인하세요.", '알림');
+  }
 
-  // 기본 생산량: f(x) 결과값 * (1 + dx_multiplier/100) (배수 시스템으로 변경)
+  // 기본 생산량: f(x) 결과값 + 적분 상수 C 
   let baseGain = equation_calc(game.fx, game.max_x);
+  baseGain = baseGain.plus(game.integral_c); // 적분 상수 적용
   if (baseGain.lt(1)) baseGain = new Decimal(1); 
   
   if (game.dx_multiplier.gt(0)) {
@@ -408,7 +411,6 @@ export const manualTick = () => {
 
 export const saveGame = () => {
   game.lastTick = Date.now();
-  game.save_version = 2;
   localStorage.setItem('math_idle_save', JSON.stringify(game));
 };
 
@@ -424,13 +426,14 @@ export const loadGame = () => {
   game.dx_points = new Decimal(data.dx_points || 0);
   game.dx_multiplier = new Decimal(data.dx_multiplier || 0);
   game.differentiationCount = new Decimal(data.differentiationCount || 0);
+  
   game.unlocked_exp = data.unlocked_exp || false;
   game.exp_x = new Decimal(data.exp_x || 0);
   game.exp_multiplier = new Decimal(data.exp_multiplier || 1);
-  game.tier2_rebirth_count = new Decimal(data.tier2_rebirth_count || 0);
-  game.tier2_best_dx = new Decimal(data.tier2_best_dx || 0);
-  game.last_tier2_used = data.last_tier2_used || 0;
-  game.save_version = data.save_version || 1;
+  
+  game.unlocked_integral = data.unlocked_integral || false;
+  game.integral_c = new Decimal(data.integral_c || 0);
+
   game.is_2x_boost_owned = data.is_2x_boost_owned || false;
   if (data.fx) game.fx = data.fx.map(val => new Decimal(val));
   if (data.x_upgrades) {
@@ -476,6 +479,7 @@ export const loadGame = () => {
     // 1분(60초) 이상 오프라인 시 보상 지급
     if (offlineMs > 30000) {
       let baseGain = equation_calc(game.fx, game.max_x);
+      baseGain = baseGain.plus(game.integral_c); // 오프라인 계산에도 적분 상수 적용
       if (baseGain.lt(1)) baseGain = new Decimal(1); 
       
       if (game.dx_multiplier.gt(0)) {
