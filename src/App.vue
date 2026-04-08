@@ -26,7 +26,7 @@ made by frotrue
       <!-- [네비게이션] 탭 메뉴 버튼 -->
       <nav class="tab-menu">
         <template v-for="tab in tabs" :key="tab.id">
-          <button v-if="tab.id !== 'exp' || game.unlocked_exp"
+          <button v-if="['exp', 'integral'].includes(tab.id) ? (tab.id === 'exp' ? game.unlocked_exp : game.unlocked_integral) : true"
                   :class="{ active: activeTab === tab.id }"
                   @click="activeTab = tab.id">
             <span class="tab-icon">{{ tab.icon }}</span>
@@ -194,67 +194,106 @@ made by frotrue
           </div>
         </div>
 
-        <!-- 5. Shop 탭 -->
-        <div v-if="activeTab === 'shop'" class="tab-pane">
-          <div class="section-title">Shop</div>
+        <!-- 4.5. Integral 탭 (적분 3차 환생) -->
+        <div v-if="activeTab === 'integral'" class="tab-pane">
+          <div class="exp-header-card" style="background-color: #2F3241;">
+            <div class="label" style="color: #A3BE8C;">INTEGRAL MULTIPLIER</div>
+            <div class="exp-resource-display" style="color: #A3BE8C;">× {{ format(game.integral_c.div(10).plus(1)) }}</div>
+            <div class="exp-desc">적분 효과: 최종 생산량 × (1 + C / 10)</div>
+          </div>
+
+          <div class="section-title">Integration (Tier 3)</div>
           <div class="upgrade-grid">
-            <div class="upg-card-mini full-row" :class="{ 'locked': game.is_2x_boost_owned }">
-              <div class="upg-name">Permanent 2x Boost</div>
-              <div class="upg-desc" style="font-size: 0.8rem; color: #aaa; margin: 5px 0;">영구적으로 f(x) 생산량이 2배 증가합니다.</div>
-              <button class="sub-btn" 
-                      :style="{ width: '100%', marginTop: '10px', backgroundColor: game.is_2x_boost_owned ? '#4c566a' : '#5e81ac' }"
-                      :disabled="game.is_2x_boost_owned"
-                      @click="buyPermanentBoost">
-                {{ game.is_2x_boost_owned ? '구매 완료 (적용 중)' : '구매하기 ($0.99)' }}
-              </button>
-            </div>
+            <button class="upg-card-mini full-row prestige-btn" @click="integrate_bt" style="background-color: rgb(32, 25, 30); border-color: #d08770; color: #d08770;">
+              <div class="upg-name">Integrate ∫f(x)dx</div>
+              <div class="upg-desc" style="color: #d08770;">Reset EVERYTHING (including DX and Exp) to gain Integral Constant C</div>
+            </button>
+          </div>
+
+          <div class="section-header" style="margin-top: 20px;">
+            <div class="section-title">Integral Upgrades</div>
+          </div>
+          <div class="upgrade-grid">
+            <button v-for="upg in game.integral_upgrades"
+                    :key="upg.id"
+                    class="upg-card-mini"
+                    :class="{
+                      'can-buy': false,
+                      'locked': true
+                    }"
+                    style="opacity: 0.5;">
+              <div class="upg-name">{{ upg.name }}</div>
+              <div class="upg-desc">Coming Soon</div>
+              <div class="upg-cost">
+                <span class="cost-val">{{ format(upg.price) }}</span>
+                <span class="cost-unit">IX</span>
+              </div>
+              <div class="upg-level">Lv.{{ upg.level }}</div>
+            </button>
           </div>
         </div>
 
-        <!-- 6. Stats 탭 -->
-        <div v-if="activeTab === 'stats'" class="tab-pane">
-          <div class="section-title">Statistics</div>
-          <div class="stats-container">
-            <div class="stats-item">
-              <span class="stats-label">Total FV Earned:</span>
-              <span class="stats-value">{{ format(game.stats.total_fv) }}</span>
-            </div>
-            <div class="stats-item">
-              <span class="stats-label">Current FV/sec:</span>
-              <span class="stats-value">{{ format(game.stats.fv_per_sec) }}</span>
-            </div>
-            <div class="stats-item">
-              <span class="stats-label">Differentiation Count:</span>
-              <span class="stats-value">{{ format(game.differentiationCount) }}</span>
-            </div>
-            <div class="stats-item">
-              <span class="stats-label">Total Play Time:</span>
-              <span class="stats-value">{{ Math.floor(game.stats.play_time / 3600) }}h {{ Math.floor((game.stats.play_time % 3600) / 60) }}m {{ Math.floor(game.stats.play_time % 60) }}s</span>
+          <!-- 5. Shop 탭 -->
+          <div v-if="activeTab === 'shop'" class="tab-pane">
+            <div class="section-title">Shop</div>
+            <div class="upgrade-grid">
+              <div class="upg-card-mini full-row" :class="{ 'locked': game.is_2x_boost_owned }">
+                <div class="upg-name">Permanent 2x Boost</div>
+                <div class="upg-desc" style="font-size: 0.8rem; color: #aaa; margin: 5px 0;">영구적으로 f(x) 생산량이 2배 증가합니다.</div>
+                <button class="sub-btn"
+                        :style="{ width: '100%', marginTop: '10px', backgroundColor: game.is_2x_boost_owned ? '#4c566a' : '#5e81ac' }"
+                        :disabled="game.is_2x_boost_owned"
+                        @click="buyPermanentBoost">
+                  {{ game.is_2x_boost_owned ? '구매 완료 (적용 중)' : '구매하기 ($0.99)' }}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- [Settings 탭] -->
-        <div v-if="activeTab === 'settings'" class="tab-pane">
-          <div class="settings-group">
-            <button class="sub-btn" @click="saveGame">SAVE GAME</button>
-            <button class="sub-btn danger" @click="resetGame">RESET DATA</button>
+          <!-- 6. Stats 탭 -->
+          <div v-if="activeTab === 'stats'" class="tab-pane">
+            <div class="section-title">Statistics</div>
+            <div class="stats-container">
+              <div class="stats-item">
+                <span class="stats-label">Total FV Earned:</span>
+                <span class="stats-value">{{ format(game.stats.total_fv) }}</span>
+              </div>
+              <div class="stats-item">
+                <span class="stats-label">Current FV/sec:</span>
+                <span class="stats-value">{{ format(game.stats.fv_per_sec) }}</span>
+              </div>
+              <div class="stats-item">
+                <span class="stats-label">Differentiation Count:</span>
+                <span class="stats-value">{{ format(game.differentiationCount) }}</span>
+              </div>
+              <div class="stats-item">
+                <span class="stats-label">Total Play Time:</span>
+                <span class="stats-value">{{ Math.floor(game.stats.play_time / 3600) }}h {{ Math.floor((game.stats.play_time % 3600) / 60) }}m {{ Math.floor(game.stats.play_time % 60) }}s</span>
+              </div>
+            </div>
           </div>
-        </div>
 
-      </main>
+          <!-- [Settings 탭] -->
+          <div v-if="activeTab === 'settings'" class="tab-pane">
+            <div class="settings-group">
+              <button class="sub-btn" @click="saveGame">SAVE GAME</button>
+              <button class="sub-btn danger" @click="resetGame">RESET DATA</button>
+            </div>
+          </div>
+
+        </main>
+
+      <!-- 커스텀 알림 컴포넌트 -->
+      <CustomAlert
+        :visible="alertState.visible"
+        :message="alertState.message"
+        :title="alertState.title"
+        :is-confirm="alertState.isConfirm"
+        @close="alertState.visible = false"
+        @confirm="alertState.onConfirm"
+        @cancel="alertState.onCancel"
+      />
     </div>
-
-    <!-- 커스텀 알림 컴포넌트 -->
-    <CustomAlert
-      :visible="alertState.visible"
-      :message="alertState.message"
-      :title="alertState.title"
-      :is-confirm="alertState.isConfirm"
-      @close="alertState.visible = false"
-      @confirm="alertState.onConfirm"
-      @cancel="alertState.onCancel"
-    />
   </div>
 </template>
 
@@ -264,6 +303,7 @@ import CustomAlert from './components/CustomAlert.vue'
 
 import {
   game, format, makefx, differentiate_bt,
+  integrate_bt,
   buyUpgrade, buyOtherUpgrade, buyExpUpgrade,
   buyMaxUpgrade, buyMaxOtherUpgrade,
   buyMaxAllOtherUpgrades,
@@ -305,12 +345,13 @@ const showConfirm = (message, onConfirm, title = '확인') => {
 setAlertCallbacks(showAlert, showConfirm);
 
 const tabs = [
-  { id: 'fx', name: 'Variable', icon: '📊' },
-  { id: 'fdx', name: 'Derivative', icon: '📈' },
-  { id: 'auto', name: 'Automation', icon: '🤖' },
-  { id: 'exp', name: 'Exponential', icon: '🧬' },
+  { id: 'fx', name: 'Variable', icon: '🧮' },
+  { id: 'fdx', name: 'Derivative', icon: '📉' },
+  { id: 'auto', name: 'Automation', icon: '⚙️' },
+  { id: 'exp', name: 'Exponential', icon: '📈' },
+  { id: 'integral', name: 'Integral', icon: '∫' },
   { id: 'shop', name: 'Shop', icon: '🛒' },
-  { id: 'stats', name: 'Stats', icon: '📝' },
+  { id: 'stats', name: 'Stats', icon: '📊' },
   { id: 'settings', name: 'Settings', icon: '⚙️' }
 ]
 

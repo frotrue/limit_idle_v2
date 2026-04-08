@@ -308,12 +308,15 @@ export const integrate_bt = () => {
       game.integral_c = game.integral_c.plus(gain);
       
       performTier3Reset();
-      showAlertFn(`적분 환생이 완료되었습니다!\n이제 모든 함수식 끝에 + ${format(game.integral_c)} 의 영구 상수가 추가됩니다.`, '적분 환생');
+      showAlertFn(`적분 환생이 완료되었습니다!\n이제 최종 생산량에 × ${format(game.integral_c.div(10).plus(1))} 적분 배율이 적용됩니다.`, '적분 환생');
     }, "적분 환생 확인");
   } else {
     showAlertFn("적분 환생을 하려면 최소 2.00 의 Exp 증폭이 필요합니다.", '알림');
   }
 };
+
+// DX는 기본 생산량을 보정하고, 적분은 최종 생산량을 증폭해 역할을 분리한다.
+const getIntegralMultiplier = () => game.integral_c.div(10).plus(1);
 
 export const buyMaxUpgrade = (upg) => {
   while (game.fv.gte(upg.price)) { buyUpgrade(upg); }
@@ -376,9 +379,8 @@ export const manualTick = () => {
     showAlertFn("적분 함수가 해금되었습니다! Integral 탭을 확인하세요.", '알림');
   }
 
-  // 기본 생산량: f(x) 결과값 + 적분 상수 C 
+  // 기본 생산량은 f(x) 계산값만 사용
   let baseGain = equation_calc(game.fx, game.max_x);
-  baseGain = baseGain.plus(game.integral_c); // 적분 상수 적용
   if (baseGain.lt(1)) baseGain = new Decimal(1); 
   
   if (game.dx_multiplier.gt(0)) {
@@ -389,7 +391,8 @@ export const manualTick = () => {
   if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
   
   // 지수 효과 적용 (승수)
-  const gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
+  let gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
+  gainPerCycle = gainPerCycle.times(getIntegralMultiplier());
   const cyclesPerTick = game.x_increase.div(game.max_x);
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
 
@@ -479,7 +482,6 @@ export const loadGame = () => {
     // 1분(60초) 이상 오프라인 시 보상 지급
     if (offlineMs > 30000) {
       let baseGain = equation_calc(game.fx, game.max_x);
-      baseGain = baseGain.plus(game.integral_c); // 오프라인 계산에도 적분 상수 적용
       if (baseGain.lt(1)) baseGain = new Decimal(1); 
       
       if (game.dx_multiplier.gt(0)) {
@@ -489,7 +491,8 @@ export const loadGame = () => {
       
       if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
       
-      const gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
+      let gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
+      gainPerCycle = gainPerCycle.times(getIntegralMultiplier());
       const cyclesPerTick = game.x_increase.div(game.max_x);
       const fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10); // 초당 10틱
       
@@ -515,4 +518,49 @@ export const resetGame = () => {
   }, "초기화 확인");
 };
 
-
+// 디버깅 및 테스트용 콘솔 명령어
+if (typeof window !== 'undefined') {
+  window.debug = {
+    addFV: (amount = "1e10") => {
+      game.fv = game.fv.plus(amount);
+      console.log(`${amount} FV가 추가되었습니다.`);
+    },
+    addDX: (amount = "1e10") => {
+      game.dx_points = game.dx_points.plus(amount);
+      game.unlocked_exp = true; // DX를 추가하면 Exp 탭도 같이 확인하기 편하도록 해금
+      console.log(`${amount} DX가 추가되었습니다.`);
+    },
+    forceTier2: (expAmount = "0.7") => {
+      // 즉시 2차 환생(지수) 효과 부여 및 해금
+      game.unlocked_exp = true;
+      game.exp_x = game.exp_x.plus(expAmount);
+      game.exp_multiplier = Decimal.exp(game.exp_x);
+      performTier2Reset();
+      console.log(`2차 환생(초월)이 강제로 실행되었습니다! 현재 exp_multiplier: ${format(game.exp_multiplier)}`);
+    },
+    forceTier3: (cAmount = "100") => {
+      // 즉시 3차 환생(적분) 효과 부여 및 해금
+      game.unlocked_exp = true;
+      game.unlocked_integral = true;
+      game.integral_c = game.integral_c.plus(cAmount);
+      performTier3Reset();
+      console.log(`3차 환생(적분)이 강제로 실행되었습니다! 현재 적분 상수 C: ${format(game.integral_c)}`);
+    },
+    unlockAll: () => {
+      game.unlocked_exp = true;
+      game.unlocked_integral = true;
+      console.log("모든 탭(Exp, Integral)이 해금되었습니다.");
+    },
+    help: () => {
+      console.log(`
+[디버그 명령어 목록]
+debug.addFV("1e10")     - FV 재화 추가 (기본값 1e10)
+debug.addDX("1e10")     - DX 재화 추가 (기본값 1e10)
+debug.forceTier2("0.7") - 즉시 2차 환생 트리거 & Exp 배율 획득
+debug.forceTier3("100") - 즉시 3차 환생 트리거 & 적분 상수(C) 획득
+debug.unlockAll()       - 모든 탭 해금
+      `);
+    }
+  };
+  console.log("🛠️ 테스트용 디버그 명령어가 로드되었습니다. 콘솔에 debug.help() 를 입력해보세요.");
+}
