@@ -49,6 +49,10 @@ export const game = reactive({
   unlocked_exp: false,
   exp_x: new Decimal(0),
   exp_multiplier: new Decimal(1),
+  tier2_rebirth_count: new Decimal(0),
+  tier2_best_dx: new Decimal(0),
+  last_tier2_used: 0,
+  save_version: 2,
   exp_upgrades: {
     0: { id: 0, name: 'Evolution of e', price: new Decimal("10000"), base_price: new Decimal("10000"), type: 'exp', level: 0 },
     1: { id: 1, name: 'Amplification', price: new Decimal("100000"), base_price: new Decimal("100000"), type: 'exp', level: 0 }
@@ -108,6 +112,19 @@ export const differentiate = (equation, x) => {
 
 let showAlertFn = (msg, title) => console.log(title, msg);
 let showConfirmFn = (msg, onConfirm, title) => { if(confirm(msg)) onConfirm(); };
+
+export const getNextEvolutionTier = () => {
+  const nextCount = new Decimal(game.tier2_rebirth_count || 0).plus(1);
+  if (nextCount.gte(3)) return 3;
+  if (nextCount.gte(2)) return 2;
+  return 1;
+};
+
+export const getTierResetScopeText = (tier) => {
+  if (tier >= 3) return '미분/자동화 업그레이드 유지';
+  if (tier >= 2) return '미분 업그레이드 유지';
+  return '미분 업그레이드 초기화';
+};
 
 export const setAlertCallbacks = (alertCb, confirmCb) => {
   showAlertFn = alertCb;
@@ -215,22 +232,40 @@ export const buyOtherUpgrade = (upg) => {
 
 export const buyExpUpgrade = (upg) => {
   if (game.dx_points.gte(upg.price)) {
-    showConfirmFn(`[경고: 초월 진화]\n강력한 지수 효과를 얻는 대신, 미분 재화(DX)를 포함한 게임의 모든 진행도가 초기화됩니다.\n\n정말 진행하시겠습니까?`, () => {
+    const tier = getNextEvolutionTier();
+    showConfirmFn(`[경고: 초월 진화 T${tier}]\n강력한 지수 효과를 얻지만 DX는 초기화됩니다.\n리셋 범위: ${getTierResetScopeText(tier)}\n\n정말 진행하시겠습니까?`, () => {
+      if (game.dx_points.gt(game.tier2_best_dx)) {
+        game.tier2_best_dx = new Decimal(game.dx_points);
+      }
+
       upg.level++;
-      // 지수함수 밸런스 패치: 2차 환생(초월)이므로 효과를 다시 강화 (0.02, 0.05 배율)
-      if (upg.id === 0) game.exp_x = game.exp_x.plus(0.02);
-      else if (upg.id === 1) game.exp_x = game.exp_x.plus(0.05);
+      // 티어가 높을수록 exp_x 증가량을 강화
+      if (tier === 1) game.exp_x = game.exp_x.plus(0.02);
+      else if (tier === 2) game.exp_x = game.exp_x.plus(0.05);
+      else game.exp_x = game.exp_x.plus(0.08);
       
       upg.price = upg.base_price.times(Decimal.pow(10, upg.level)).floor();
       game.exp_multiplier = Decimal.exp(game.exp_x);
+      game.last_tier2_used = tier;
+      game.tier2_rebirth_count = game.tier2_rebirth_count.plus(1);
 
-      performTier2Reset();
-      showAlertFn(`초월 진화가 완료되었습니다!\n이제 f(x)가 ${format(game.exp_multiplier)} 승수만큼 증폭됩니다.`, '초월 진화');
+      performTier2Reset(tier);
+      showAlertFn(`T${tier} 초월 진화가 완료되었습니다!\n이제 f(x)가 ${format(game.exp_multiplier)} 승수만큼 증폭됩니다.`, '초월 진화');
     }, "초월 진화 확인");
   }
 };
 
-export const performTier2Reset = () => {
+export const performTier2Reset = (tier = 1) => {
+  const preservedDiffCount = new Decimal(game.differentiationCount);
+  const preservedDDX = {
+    prestige_x: new Decimal(game.prestige_x),
+    upg2_level: game.other_upgrades[2].level,
+    upg2_price: new Decimal(game.other_upgrades[2].price),
+    upg3_level: game.other_upgrades[3].level,
+    upg3_price: new Decimal(game.other_upgrades[3].price)
+  };
+  const preservedAutoIntervals = game.auto_upgrades.map(auto => auto.interval);
+
   game.fv = new Decimal(10);
   game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
   game.current_x = new Decimal(0);
@@ -253,12 +288,32 @@ export const performTier2Reset = () => {
 
   game.dx_points = new Decimal(0);
   game.dx_multiplier = new Decimal(0);
-  game.differentiationCount = new Decimal(0);
-  game.prestige_x = new Decimal(1);
+  game.differentiationCount = preservedDiffCount;
 
-  game.auto_upgrades[0].interval = 10000;
-  game.auto_upgrades[1].interval = 2000;
-  game.auto_upgrades[2].interval = 5000;
+  if (tier >= 2) {
+    game.prestige_x = preservedDDX.prestige_x;
+    game.other_upgrades[2].level = preservedDDX.upg2_level;
+    game.other_upgrades[2].price = preservedDDX.upg2_price;
+    game.other_upgrades[3].level = preservedDDX.upg3_level;
+    game.other_upgrades[3].price = preservedDDX.upg3_price;
+  } else {
+    game.prestige_x = new Decimal(1);
+
+    game.other_upgrades[2].level = 0;
+    game.other_upgrades[2].price = new Decimal(10);
+    game.other_upgrades[3].level = 0;
+    game.other_upgrades[3].price = new Decimal(50);
+  }
+
+  if (tier >= 3) {
+    game.auto_upgrades[0].interval = preservedAutoIntervals[0];
+    game.auto_upgrades[1].interval = preservedAutoIntervals[1];
+    game.auto_upgrades[2].interval = preservedAutoIntervals[2];
+  } else {
+    game.auto_upgrades[0].interval = 10000;
+    game.auto_upgrades[1].interval = 2000;
+    game.auto_upgrades[2].interval = 5000;
+  }
 
   makefx();
   saveGame()
@@ -353,6 +408,7 @@ export const manualTick = () => {
 
 export const saveGame = () => {
   game.lastTick = Date.now();
+  game.save_version = 2;
   localStorage.setItem('math_idle_save', JSON.stringify(game));
 };
 
@@ -371,6 +427,10 @@ export const loadGame = () => {
   game.unlocked_exp = data.unlocked_exp || false;
   game.exp_x = new Decimal(data.exp_x || 0);
   game.exp_multiplier = new Decimal(data.exp_multiplier || 1);
+  game.tier2_rebirth_count = new Decimal(data.tier2_rebirth_count || 0);
+  game.tier2_best_dx = new Decimal(data.tier2_best_dx || 0);
+  game.last_tier2_used = data.last_tier2_used || 0;
+  game.save_version = data.save_version || 1;
   game.is_2x_boost_owned = data.is_2x_boost_owned || false;
   if (data.fx) game.fx = data.fx.map(val => new Decimal(val));
   if (data.x_upgrades) {
