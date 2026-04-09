@@ -55,6 +55,7 @@ export const game = reactive({
   },
   unlocked_integral: false,
   integral_c: new Decimal(0),
+  integral_count: 0,
   integral_upgrades: {
     0: { id: 0, name: 'Higher Dimension (x¹⁰+)', price: new Decimal("10"), base_price: new Decimal("10"), type: 'integral', level: 0 },
     1: { id: 1, name: 'Time Accumulation', price: new Decimal("50"), base_price: new Decimal("50"), type: 'integral', level: 0 }
@@ -306,9 +307,10 @@ export const integrate_bt = () => {
 
     showConfirmFn(`[경고: 적분 (3차 환생)]\n현재까지의 모든 f(x), 미분(DX), 지수(Exp)를 잃는 대신,\n정적분 영역에 비례한 영구 '적분 상수(C)' ${format(gain)} 를 얻습니다.\n\n정말 진행하시겠습니까?`, () => {
       game.integral_c = game.integral_c.plus(gain);
+      game.integral_count += 1;
       
       performTier3Reset();
-      showAlertFn(`적분 환생이 완료되었습니다!\n이제 최종 생산량에 × ${format(game.integral_c.div(10).plus(1))} 적분 배율이 적용됩니다.`, '적분 환생');
+      showAlertFn(`적분 환생이 완료되었습니다!\n이제 최종 생산량에 × ${format(getIntegralMultiplier())} 적분 배율이 적용됩니다.`, '적분 환생');
     }, "적분 환생 확인");
   } else {
     showAlertFn("적분 환생을 하려면 최소 2.00 의 Exp 증폭이 필요합니다.", '알림');
@@ -316,7 +318,8 @@ export const integrate_bt = () => {
 };
 
 // DX는 기본 생산량을 보정하고, 적분은 최종 생산량을 증폭해 역할을 분리한다.
-const getIntegralMultiplier = () => game.integral_c.div(10).plus(1);
+export const getIntegralDivisor = () => Math.max(1, 10 - game.integral_count);
+const getIntegralMultiplier = () => game.integral_c.div(getIntegralDivisor()).plus(1);
 
 export const buyMaxUpgrade = (upg) => {
   while (game.fv.gte(upg.price)) { buyUpgrade(upg); }
@@ -436,6 +439,7 @@ export const loadGame = () => {
   
   game.unlocked_integral = data.unlocked_integral || false;
   game.integral_c = new Decimal(data.integral_c || 0);
+  game.integral_count = Math.max(0, Number(data.integral_count || 0));
 
   game.is_2x_boost_owned = data.is_2x_boost_owned || false;
   if (data.fx) game.fx = data.fx.map(val => new Decimal(val));
@@ -543,8 +547,9 @@ if (typeof window !== 'undefined') {
       game.unlocked_exp = true;
       game.unlocked_integral = true;
       game.integral_c = game.integral_c.plus(cAmount);
+      game.integral_count += 1;
       performTier3Reset();
-      console.log(`3차 환생(적분)이 강제로 실행되었습니다! 현재 적분 상수 C: ${format(game.integral_c)}`);
+      console.log(`3차 환생(적분)이 강제로 실행되었습니다! 현재 적분 상수 C: ${format(game.integral_c)}, 현재 분모: ${getIntegralDivisor()}`);
     },
     unlockAll: () => {
       game.unlocked_exp = true;

@@ -1,6 +1,6 @@
 <!--
 Limit Idle
-reference : gemini 3.0
+reference : gemini 3.1 and codex 5.3
 github : frotrue/limit-idle
 using tech : vue.js, break_eternity.js
 made by frotrue
@@ -198,8 +198,9 @@ made by frotrue
         <div v-if="activeTab === 'integral'" class="tab-pane">
           <div class="exp-header-card" style="background-color: #2F3241;">
             <div class="label" style="color: #A3BE8C;">INTEGRAL MULTIPLIER</div>
-            <div class="exp-resource-display" style="color: #A3BE8C;">× {{ format(game.integral_c.div(10).plus(1)) }}</div>
-            <div class="exp-desc">적분 효과: 최종 생산량 × (1 + C / 10)</div>
+            <div class="exp-resource-display" style="color: #A3BE8C;">× {{ format(game.integral_c.div(getIntegralDivisor()).plus(1)) }}</div>
+            <div class="exp-desc">적분 효과: 최종 생산량 × (1 + C / {{ getIntegralDivisor() }})</div>
+            <div class="exp-desc" style="margin-top: 5px; color: #A3BE8C;">적분 횟수: {{ game.integral_count }}회 (최소 분모 1)</div>
           </div>
 
           <div class="section-title">Integration (Tier 3)</div>
@@ -307,6 +308,7 @@ import {
   buyUpgrade, buyOtherUpgrade, buyExpUpgrade,
   buyMaxUpgrade, buyMaxOtherUpgrade,
   buyMaxAllOtherUpgrades,
+  getIntegralDivisor,
   setAlertCallbacks, manualTick, saveGame, loadGame, resetGame
 } from './gameLogic.js'
 
