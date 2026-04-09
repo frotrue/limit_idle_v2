@@ -83,9 +83,7 @@ export const makefx = () => {
   }
   let base_str = parts.join(" + ") || "0";
   if (game.dx_multiplier.gt(0)) {
-    // 1 + dx_multiplier/100 형태의 배율을 시각적으로 f(x)에 곱해줌
-    const dx_bonus_percent = game.dx_multiplier.div(100).plus(1);
-    game.fx_str = `( ${base_str} ) × ${format(dx_bonus_percent)}`;
+    game.fx_str = `( ${base_str} ) + ${format(game.dx_multiplier)}`;
   } else {
     game.fx_str = base_str;
   }
@@ -387,8 +385,7 @@ export const manualTick = () => {
   if (baseGain.lt(1)) baseGain = new Decimal(1); 
   
   if (game.dx_multiplier.gt(0)) {
-    const dx_bonus = game.dx_multiplier.div(100).plus(1);
-    baseGain = baseGain.times(dx_bonus);
+    baseGain = baseGain.plus(game.dx_multiplier);
   }
   
   if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
@@ -489,8 +486,7 @@ export const loadGame = () => {
       if (baseGain.lt(1)) baseGain = new Decimal(1); 
       
       if (game.dx_multiplier.gt(0)) {
-        const dx_bonus = game.dx_multiplier.div(100).plus(1);
-        baseGain = baseGain.times(dx_bonus);
+        baseGain = baseGain.plus(game.dx_multiplier);
       }
       
       if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
