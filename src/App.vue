@@ -95,6 +95,7 @@ made by frotrue
           <div class="dx-header-card">
             <div class="label">DERIVATIVE POINTS</div>
             <div class="dx-resource-display">{{ format(game.dx_points) }} DX</div>
+            <div class="exp-desc" style="margin-top: 5px; color: #88c0d0;">Automation Points: {{ format(game.ap_points) }} AP</div>
           </div>
 
           <div class="section-title">Differentiation</div>
@@ -114,15 +115,15 @@ made by frotrue
               <button v-if="upg.type === 'ddx'"
                       class="upg-card-mini"
                       :class="{
-                        'can-buy': game.dx_points.gte(upg.price),
-                        'locked': game.dx_points.lt(upg.price)
+                        'can-buy': canAffordUpgrade(upg),
+                        'locked': !canAffordUpgrade(upg)
                       }"
                       @click="buyOtherUpgrade(upg)"
                       @contextmenu.prevent="buyMaxOtherUpgrade(upg)">
                 <div class="upg-name">{{ upg.name }}</div>
                 <div class="upg-cost">
                   <span class="cost-val">{{ format(upg.price) }}</span>
-                  <span class="cost-unit">DX</span>
+                  <span class="cost-unit">{{ getUpgradeCurrencyLabel(upg) }}</span>
                 </div>
                 <div class="upg-level">Lv.{{ upg.level }}</div>
               </button>
@@ -141,12 +142,12 @@ made by frotrue
           <div class="upgrade-grid">
             <div v-for="auto in game.auto_upgrades" :key="auto.id"
                  class="upg-card-mini"
-                 :class="{ 'locked': game.differentiationCount.lt(auto.unlockedAt) }">
+                 :class="{ 'locked': !tier3MilestoneState.bonuses.permanentAutoUnlock && game.differentiationCount.lt(auto.unlockedAt) }">
               <div class="upg-name">{{ auto.name }}</div>
               
-              <template v-if="game.differentiationCount.gte(auto.unlockedAt)">
-                <div class="upg-level">Interval: {{ auto.interval / 1000 }}s</div>
-                <button class="sub-btn" 
+              <template v-if="tier3MilestoneState.bonuses.permanentAutoUnlock || game.differentiationCount.gte(auto.unlockedAt)">
+                <div class="upg-level">Interval: {{ formatAutoInterval(auto.interval) }}</div>
+                <button class="sub-btn"
                         :style="{ backgroundColor: auto.active ? '#5e81ac' : '#1a1a1e', width: '100%' }"
                         @click="auto.active = !auto.active">
                   {{ auto.active ? 'ACTIVE' : 'INACTIVE' }}
@@ -168,29 +169,43 @@ made by frotrue
             <div class="exp-resource-display">^{{ format(game.exp_multiplier) }}</div>
             <div class="exp-desc">생산량 증폭: (f(x) + DX)^{{ format(game.exp_multiplier) }}</div>
             <div class="exp-desc" style="margin-top: 5px; color: #ff79c6;">E = e^{{ format(game.exp_x) }}</div>
+            <div class="exp-desc" style="margin-top: 5px; color: #88c0d0;">Tier2 마일스톤 포인트: {{ tier2MilestoneState.count }}</div>
           </div>
 
           <div class="section-header">
-            <div class="section-title">Exponential Upgrades</div>
+            <div class="section-title">Exponential Rebirth (Tier 2)</div>
           </div>
           <div class="upgrade-grid">
-            <button v-for="upg in game.exp_upgrades"
-                    :key="upg.id"
-                    class="upg-card-mini"
+            <button class="upg-card-mini full-row prestige-btn"
                     :class="{
-                      'can-buy': game.dx_points.gte(upg.price),
-                      'locked': game.dx_points.lt(upg.price)
+                      'can-buy': game.dx_points.gte(game.exp_upgrades[0].price),
+                      'locked': game.dx_points.lt(game.exp_upgrades[0].price)
                     }"
-                    @click="buyExpUpgrade(upg)">
-              <div class="upg-name">{{ upg.name }}</div>
-              <div class="upg-desc" v-if="upg.id === 0">Increase exp_x by 0.02 <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
-              <div class="upg-desc" v-if="upg.id === 1">Increase exp_x by 0.05 <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
+                    @click="buyExpUpgrade(game.exp_upgrades[0])">
+              <div class="upg-name">{{ game.exp_upgrades[0].name }}</div>
+              <div class="upg-desc">Increase exp_x by {{ expGainPreview() }} <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
               <div class="upg-cost">
-                <span class="cost-val">{{ format(upg.price) }}</span>
+                <span class="cost-val">{{ format(game.exp_upgrades[0].price) }}</span>
                 <span class="cost-unit">DX</span>
               </div>
-              <div class="upg-level">Lv.{{ upg.level }}</div>
+              <div class="upg-level">Lv.{{ game.exp_upgrades[0].level }}</div>
             </button>
+          </div>
+
+          <div class="section-header" style="margin-top: 20px; margin-bottom: 10px;">
+            <div class="section-title">Tier 2 Milestones (영구 유지)</div>
+          </div>
+          <div class="stats-container">
+            <div v-for="ms in tier2MilestoneTable" :key="ms.id" class="stats-item" style="align-items: flex-start; flex-direction: column; gap: 4px;">
+              <span class="stats-label">{{ ms.name }} - 포인트 {{ ms.at }}</span>
+              <span class="exp-desc" style="color: #d8dee9;">{{ tier2MilestoneEffectText(ms.bonus) }}</span>
+              <span class="stats-value" :style="{ color: ms.unlocked ? '#a3be8c' : '#bf616a' }">
+                {{ ms.unlocked ? '해금 완료' : `남은 포인트: ${ms.remaining}` }}
+              </span>
+            </div>
+            <div v-if="tier2MilestoneState.next" class="exp-desc" style="margin-top: 10px; color: #ebcb8b;">
+              다음 마일스톤: {{ tier2MilestoneState.next.name }} (포인트 {{ tier2MilestoneState.next.at }})
+            </div>
           </div>
         </div>
 
@@ -201,41 +216,56 @@ made by frotrue
             <div class="exp-resource-display" style="color: #A3BE8C;">× {{ format(game.integral_c.div(getIntegralDivisor()).plus(1)) }}</div>
             <div class="exp-desc">적분 효과: 최종 생산량 × (1 + C / {{ getIntegralDivisor() }})</div>
             <div class="exp-desc" style="margin-top: 5px; color: #A3BE8C;">적분 횟수: {{ game.integral_count }}회 (최소 분모 1)</div>
+            <div class="exp-desc" style="margin-top: 5px; color: #88c0d0;">
+              리셋 시작 보너스: +{{ format(tier3MilestoneState.bonuses.startFv) }} FV,
+              +{{ format(tier3MilestoneState.bonuses.startXIncrease) }} x 증가,
+              +{{ format(tier3MilestoneState.bonuses.startMaxX) }} Max x
+            </div>
+            <div v-if="tier3MilestoneState.bonuses.permanentAutoUnlock" class="exp-desc" style="margin-top: 5px; color: #a3be8c;">
+              영구 자동화 활성: 모든 자동 업그레이드 잠금이 영구 해제됩니다.
+            </div>
           </div>
 
-          <div class="section-title">Integration (Tier 3)</div>
-          <div class="upgrade-grid">
-            <button class="upg-card-mini full-row prestige-btn"
-                    :class="{ locked: !canIntegrateNow }"
-                    :disabled="!canIntegrateNow"
-                    @click="integrate_bt"
-                    style="background-color: rgb(32, 25, 30); border-color: #d08770; color: #d08770;">
-              <div class="upg-name">Integrate ∫f(x)dx</div>
-              <div class="upg-desc" style="color: #d08770;">Reset EVERYTHING (including DX and Exp) to gain Integral Constant C</div>
-              <div v-if="!canIntegrateNow" class="upg-desc" style="font-size: 0.7rem; color: #bf616a; margin-top: 4px;">조건: Exp 증폭 2.00 이상</div>
+          <nav class="tab-menu" style="margin-bottom: 12px;">
+            <button :class="{ active: integralSubTab === 'rebirth' }" @click="integralSubTab = 'rebirth'">
+              <span class="tab-label">환생</span>
             </button>
+            <button :class="{ active: integralSubTab === 'milestones' }" @click="integralSubTab = 'milestones'">
+              <span class="tab-label">마일스톤</span>
+            </button>
+          </nav>
+
+          <div v-if="integralSubTab === 'rebirth'">
+            <div class="section-title">Integration (Tier 3)</div>
+            <div class="upgrade-grid">
+              <button class="upg-card-mini full-row prestige-btn"
+                      :class="{ locked: !canIntegrateNow }"
+                      :disabled="!canIntegrateNow"
+                      @click="integrate_bt"
+                      style="background-color: rgb(32, 25, 30); border-color: #d08770; color: #d08770;">
+                <div class="upg-name">Integrate ∫f(x)dx</div>
+                <div class="upg-desc" style="color: #d08770;">Reset EVERYTHING (including DX and Exp) to gain Integral Constant C</div>
+                <div v-if="!canIntegrateNow" class="upg-desc" style="font-size: 0.7rem; color: #bf616a; margin-top: 4px;">조건: Exp 증폭 2.00 이상</div>
+              </button>
+            </div>
           </div>
 
-          <div class="section-header" style="margin-top: 20px;">
-            <div class="section-title">Integral Upgrades</div>
-          </div>
-          <div class="upgrade-grid">
-            <button v-for="upg in game.integral_upgrades"
-                    :key="upg.id"
-                    class="upg-card-mini"
-                    :class="{
-                      'can-buy': false,
-                      'locked': true
-                    }"
-                    style="opacity: 0.5;">
-              <div class="upg-name">{{ upg.name }}</div>
-              <div class="upg-desc">Coming Soon</div>
-              <div class="upg-cost">
-                <span class="cost-val">{{ format(upg.price) }}</span>
-                <span class="cost-unit">IX</span>
+          <div v-else>
+            <div class="section-header" style="margin-bottom: 10px;">
+              <div class="section-title">Tier 3 Milestones</div>
+            </div>
+            <div class="stats-container" style="margin-bottom: 20px;">
+              <div v-for="ms in tier3MilestoneTable" :key="ms.id" class="stats-item" style="align-items: flex-start; flex-direction: column; gap: 4px;">
+                <span class="stats-label">{{ ms.name }} - 적분 {{ ms.at }}회</span>
+                <span class="exp-desc" style="color: #d8dee9;">{{ milestoneEffectText(ms.bonus) }}</span>
+                <span class="stats-value" :style="{ color: ms.unlocked ? '#a3be8c' : '#bf616a' }">
+                  {{ ms.unlocked ? '해금 완료' : `남은 횟수: ${ms.remaining}` }}
+                </span>
               </div>
-              <div class="upg-level">Lv.{{ upg.level }}</div>
-            </button>
+              <div v-if="tier3MilestoneState.next" class="exp-desc" style="margin-top: 10px; color: #ebcb8b;">
+                다음 마일스톤: {{ tier3MilestoneState.next.name }} (적분 {{ tier3MilestoneState.next.at }}회)
+              </div>
+            </div>
           </div>
         </div>
 
@@ -314,6 +344,8 @@ import {
   buyMaxUpgrade, buyMaxOtherUpgrade,
   buyMaxAllOtherUpgrades,
   getIntegralDivisor, canIntegrate,
+  getTier2MilestoneState, getTier2MilestoneTable,
+  getTier3MilestoneState, getTier3MilestoneTable,
   setAlertCallbacks, manualTick, saveGame, loadGame, resetGame
 } from './gameLogic.js'
 
@@ -321,7 +353,64 @@ const PRODUCT_2X_BOOST = 'fv_permanent_x2';
 const PRODUCT_2X_BOOST_ALT = 'fv-permanent-x2';
 
 const activeTab = ref('fx')
+const integralSubTab = ref('rebirth')
 const canIntegrateNow = computed(() => canIntegrate())
+const tier2MilestoneState = computed(() => getTier2MilestoneState())
+const tier2MilestoneTable = computed(() => getTier2MilestoneTable())
+const tier3MilestoneState = computed(() => getTier3MilestoneState())
+const tier3MilestoneTable = computed(() => getTier3MilestoneTable())
+
+const expGainPreview = () => {
+  const base = 0.04
+  return (base + (tier2MilestoneState.value.bonuses.extraExpX || 0)).toFixed(2)
+}
+
+const tier2MilestoneEffectText = (bonus = {}) => {
+  const chunks = []
+  if (bonus.extraExpX) chunks.push(`Exp 구매당 exp_x +${bonus.extraExpX.toFixed(2)}`)
+  if (bonus.expPriceMultiplier) chunks.push(`Exp 업그레이드 가격 x${Number(bonus.expPriceMultiplier).toFixed(2)}`)
+  if (bonus.apGainMultiplier) chunks.push(`미분 AP 획득 x${Number(bonus.apGainMultiplier).toFixed(2)}`)
+  if (bonus.xUpgradePriceMultiplier) chunks.push(`Variable 업그레이드 가격 x${Number(bonus.xUpgradePriceMultiplier).toFixed(2)}`)
+  if (bonus.fxUpgradePriceMultiplier) chunks.push(`Variable 기타 업그레이드 가격 x${Number(bonus.fxUpgradePriceMultiplier).toFixed(2)}`)
+  if (bonus.startFv) chunks.push(`환생 시작 FV +${format(bonus.startFv)}`)
+  if (bonus.startXUpgradeLevels) {
+    const levels = Object.keys(bonus.startXUpgradeLevels)
+      .map((id) => `x${id} Lv+${bonus.startXUpgradeLevels[id]}`)
+      .join(', ')
+    if (levels) chunks.push(`시작 레벨 보너스: ${levels}`)
+  }
+  return chunks.join(' / ') || '보상 없음'
+}
+
+const milestoneEffectText = (bonus = {}) => {
+  const chunks = []
+  if (bonus.startFv) chunks.push(`시작 FV +${format(bonus.startFv)}`)
+  if (bonus.startXIncrease) chunks.push(`시작 x 증가 +${format(bonus.startXIncrease)}`)
+  if (bonus.startMaxX) chunks.push(`시작 Max x +${format(bonus.startMaxX)}`)
+  if (bonus.permanentAutoUnlock) chunks.push('자동 업그레이드 영구 잠금 해제')
+  if (bonus.autoUpgradeUsesMaxBuy) chunks.push('자동 업그레이드가 Buy Max 방식으로 동작')
+  return chunks.join(' / ') || '보상 없음'
+}
+
+const formatAutoInterval = (intervalMs) => {
+  const ms = Number(intervalMs || 0)
+  if (ms > 0 && ms < 100) return 'per tick'
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+const getUpgradeCurrencyLabel = (upg) => {
+  if (upg.currency) return upg.currency
+  if (upg.type === 'ddx') return 'DX'
+  if (upg.type === 'fx') return 'FV'
+  return 'FV'
+}
+
+const canAffordUpgrade = (upg) => {
+  const currency = getUpgradeCurrencyLabel(upg)
+  if (currency === 'AP') return game.ap_points.gte(upg.price)
+  if (currency === 'DX') return game.dx_points.gte(upg.price)
+  return game.fv.gte(upg.price)
+}
 
 // 알림 상태 관리
 const alertState = reactive({
