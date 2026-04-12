@@ -205,9 +205,14 @@ made by frotrue
 
           <div class="section-title">Integration (Tier 3)</div>
           <div class="upgrade-grid">
-            <button class="upg-card-mini full-row prestige-btn" @click="integrate_bt" style="background-color: rgb(32, 25, 30); border-color: #d08770; color: #d08770;">
+            <button class="upg-card-mini full-row prestige-btn"
+                    :class="{ locked: !canIntegrateNow }"
+                    :disabled="!canIntegrateNow"
+                    @click="integrate_bt"
+                    style="background-color: rgb(32, 25, 30); border-color: #d08770; color: #d08770;">
               <div class="upg-name">Integrate ∫f(x)dx</div>
               <div class="upg-desc" style="color: #d08770;">Reset EVERYTHING (including DX and Exp) to gain Integral Constant C</div>
+              <div v-if="!canIntegrateNow" class="upg-desc" style="font-size: 0.7rem; color: #bf616a; margin-top: 4px;">조건: Exp 증폭 2.00 이상</div>
             </button>
           </div>
 
@@ -299,7 +304,7 @@ made by frotrue
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import CustomAlert from './components/CustomAlert.vue'
 
 import {
@@ -308,7 +313,7 @@ import {
   buyUpgrade, buyOtherUpgrade, buyExpUpgrade,
   buyMaxUpgrade, buyMaxOtherUpgrade,
   buyMaxAllOtherUpgrades,
-  getIntegralDivisor,
+  getIntegralDivisor, canIntegrate,
   setAlertCallbacks, manualTick, saveGame, loadGame, resetGame
 } from './gameLogic.js'
 
@@ -316,6 +321,7 @@ const PRODUCT_2X_BOOST = 'fv_permanent_x2';
 const PRODUCT_2X_BOOST_ALT = 'fv-permanent-x2';
 
 const activeTab = ref('fx')
+const canIntegrateNow = computed(() => canIntegrate())
 
 // 알림 상태 관리
 const alertState = reactive({

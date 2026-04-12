@@ -295,9 +295,11 @@ export const performTier3Reset = () => {
   saveGame();
 };
 
+export const canIntegrate = () => game.unlocked_integral && game.exp_multiplier.gte(2);
+
 export const integrate_bt = () => {
-  // 해금 조건: 지수 배율이 일정 수준 이상 도달했을 때 (밸런스 조절: 1e5 -> 2)
-  if (game.exp_multiplier.gte(2)) {
+  // 로직 레벨 가드: UI 상태와 무관하게 조건 미달이면 절대 실행되지 않도록 차단
+  if (canIntegrate()) {
     let raw_integral = integrate_calc(game.fx, game.max_x);
     // 밸런스를 위해 로그값을 취하거나 일정 비율로 C (IX) 획득
     let gain = raw_integral.pow(0.1).floor(); 
