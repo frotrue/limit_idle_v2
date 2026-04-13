@@ -139,6 +139,28 @@ const applyStartingXUpgradeLevels = (tier2) => {
   });
 };
 
+const applyRunStartState = (tier2) => {
+  const t3Bonus = getTier3StartBonuses();
+  const t2Start = getTier2StartBonuses();
+
+  game.fv = new Decimal(10).plus(t3Bonus.startFv).plus(t2Start.startFv);
+  game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
+  game.current_x = new Decimal(0);
+  game.max_x = new Decimal(1).plus(t3Bonus.startMaxX);
+  game.x_increase = Decimal.min(game.max_x, new Decimal(0.05).plus(t3Bonus.startXIncrease));
+
+  Object.values(game.x_upgrades).forEach(upg => {
+    upg.level = 0;
+    upg.price = Decimal.pow(10, upg.id + 1).times(tier2.xUpgradePriceMultiplier).ceil();
+  });
+  applyStartingXUpgradeLevels(tier2);
+
+  game.other_upgrades[0].level = 0;
+  game.other_upgrades[0].price = new Decimal(1000).times(tier2.fxUpgradePriceMultiplier).ceil();
+  game.other_upgrades[1].level = 0;
+  game.other_upgrades[1].price = new Decimal(100).times(tier2.fxUpgradePriceMultiplier).ceil();
+};
+
 const getUpgradeCurrency = (upg) => upg.currency || (upg.type === 'ddx' ? 'DX' : 'FV');
 
 const getCurrencyAmount = (currency) => {
@@ -230,21 +252,7 @@ const performDifferentiation = () => {
   game.dx_multiplier = game.dx_multiplier.plus(gain);
   game.differentiationCount = game.differentiationCount.plus(1);
 
-  game.fv = new Decimal(10);
-  game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
-  game.current_x = new Decimal(0);
-  game.max_x = new Decimal(1);
-  game.x_increase = new Decimal(0.05);
-
-  Object.values(game.x_upgrades).forEach(upg => {
-    upg.level = 0;
-    upg.price = Decimal.pow(10, upg.id + 1).times(tier2.xUpgradePriceMultiplier).ceil();
-  });
-
-  game.other_upgrades[0].level = 0;
-  game.other_upgrades[0].price = new Decimal(1000).times(tier2.fxUpgradePriceMultiplier).ceil();
-  game.other_upgrades[1].level = 0;
-  game.other_upgrades[1].price = new Decimal(100).times(tier2.fxUpgradePriceMultiplier).ceil();
+  applyRunStartState(tier2);
 
   makefx();
   return { gain, apGain };
@@ -355,25 +363,9 @@ export const buyExpUpgrade = (upg) => {
 };
 
 export const performTier2Reset = () => {
-  const t3Bonus = getTier3StartBonuses();
   const tier2 = getTier2Bonuses();
-  const t2Start = getTier2StartBonuses();
-  game.fv = new Decimal(10).plus(t3Bonus.startFv).plus(t2Start.startFv);
-  game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
-  game.current_x = new Decimal(0);
-  game.max_x = new Decimal(1).plus(t3Bonus.startMaxX);
-  game.x_increase = Decimal.min(game.max_x, new Decimal(0.05).plus(t3Bonus.startXIncrease));
-
-  Object.values(game.x_upgrades).forEach(upg => {
-    upg.level = 0;
-    upg.price = Decimal.pow(10, upg.id + 1).times(tier2.xUpgradePriceMultiplier).ceil();
-  });
-  applyStartingXUpgradeLevels(tier2);
-
-  game.other_upgrades[0].level = 0;
-  game.other_upgrades[0].price = new Decimal(1000).times(tier2.fxUpgradePriceMultiplier).ceil();
-  game.other_upgrades[1].level = 0;
-  game.other_upgrades[1].price = new Decimal(100).times(tier2.fxUpgradePriceMultiplier).ceil();
+  const t3Bonus = getTier3StartBonuses();
+  applyRunStartState(tier2);
   game.other_upgrades[2].level = 0;
   game.other_upgrades[2].price = new Decimal(10);
   game.other_upgrades[3].level = 0;
