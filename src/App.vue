@@ -325,9 +325,9 @@ made by frotrue
         :message="alertState.message"
         :title="alertState.title"
         :is-confirm="alertState.isConfirm"
-        @close="alertState.visible = false"
-        @confirm="alertState.onConfirm"
-        @cancel="alertState.onCancel"
+        @close="handleAlertClose"
+        @confirm="handleAlertConfirm"
+        @cancel="handleAlertCancel"
       />
     </div>
   </div>
@@ -422,10 +422,34 @@ const alertState = reactive({
   onCancel: () => {}
 })
 
+const resetAlertCallbacks = () => {
+  alertState.onConfirm = () => {}
+  alertState.onCancel = () => {}
+}
+
+const handleAlertClose = () => {
+  alertState.visible = false
+  alertState.isConfirm = false
+  resetAlertCallbacks()
+}
+
+const handleAlertConfirm = () => {
+  const cb = alertState.isConfirm ? alertState.onConfirm : null
+  handleAlertClose()
+  if (typeof cb === 'function') cb()
+}
+
+const handleAlertCancel = () => {
+  const cb = alertState.isConfirm ? alertState.onCancel : null
+  handleAlertClose()
+  if (typeof cb === 'function') cb()
+}
+
 const showAlert = (message, title = '알림') => {
   alertState.message = message
   alertState.title = title
   alertState.isConfirm = false
+  resetAlertCallbacks()
   alertState.visible = true
 }
 
@@ -433,7 +457,7 @@ const showConfirm = (message, onConfirm, title = '확인') => {
   alertState.message = message
   alertState.title = title
   alertState.isConfirm = true
-  alertState.onConfirm = onConfirm
+  alertState.onConfirm = typeof onConfirm === 'function' ? onConfirm : () => {}
   alertState.onCancel = () => {}
   alertState.visible = true
 }

@@ -244,6 +244,9 @@ export const setAlertCallbacks = (alertCb, confirmCb) => {
 const canDifferentiateNow = () => game.fv.gte('1e10');
 
 const performDifferentiation = () => {
+  // Hard guard: never allow differentiation below requirement, regardless of UI state.
+  if (!canDifferentiateNow()) return null;
+
   const gain = differentiate(game.fx, game.prestige_x);
   const tier2 = getTier2Bonuses();
   const apGain = Decimal.max(1, gain.plus(1).log10().floor().times(tier2.apGainMultiplier).floor());
@@ -261,7 +264,12 @@ const performDifferentiation = () => {
 export const differentiate_bt = () => {
   if (canDifferentiateNow()) {
     showConfirmFn("미분 시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분 시 f'("+game.prestige_x+") = "+format(differentiate(game.fx,game.prestige_x))+" 만큼의 DX를 얻습니다", () => {
-      const { gain, apGain } = performDifferentiation();
+      const result = performDifferentiation();
+      if (!result) {
+        showAlertFn("미분하려면 최소 1.00e10 FV가 필요합니다.", '알림');
+        return;
+      }
+      const { gain, apGain } = result;
       showAlertFn(`${format(gain)} DX, ${format(apGain)} AP를 획득했습니다!`, '알림');
     }, "미분 확인");
   } else {
@@ -345,6 +353,12 @@ export const buyOtherUpgrade = (upg) => {
 export const buyExpUpgrade = (upg) => {
   if (game.dx_points.gte(upg.price)) {
     showConfirmFn(`[경고: 초월 진화]\n강력한 지수 효과를 얻는 대신, 미분 재화(DX)를 포함한 게임의 모든 진행도가 초기화됩니다.\n\n정말 진행하시겠습니까?`, () => {
+      // Hard guard: stale confirm callbacks must not bypass current DX cost.
+      if (!game.dx_points.gte(upg.price)) {
+        showAlertFn("DX가 부족하여 초월 진화를 진행할 수 없습니다.", '알림');
+        return;
+      }
+
       upg.level++;
       game.exp_milestone_points += 1;
       const tier2 = getTier2Bonuses();
