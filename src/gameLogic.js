@@ -57,6 +57,13 @@ export const game = reactive({
     { id: 2, name: 'Auto DX Utility Upgrade', targetType: 'other_upgrades_ddx', interval: 5000, lastTick: 0, unlockedAt: 5, active: false },
     { id: 3, name: 'Auto Differentiate', targetType: 'differentiate', interval: 15000, lastTick: 0, unlockedAt: 7, active: false },
   ],
+  auto_diff: {
+    mode: 'dx', // off | fv | dx | either
+    fv_threshold: '1e20',
+    dx_threshold: '1e6',
+    cooldown_ms: 1500,
+    last_trigger_at: 0
+  },
   unlocked_exp: false,
   exp_x: new Decimal(0),
   exp_multiplier: new Decimal(1),
@@ -79,29 +86,74 @@ export const game = reactive({
 });
 
 const getTier3StartBonuses = () => {
+  const count = Math.max(0, Number(game.integral_count || 0));
+  if (cachedTier3Bonuses && cachedTier3BonusCount === count) return cachedTier3Bonuses;
+
   const raw = getTier3MilestoneBonuses(game.integral_count);
   // Start speed bonus has a cap to prevent runaway acceleration in early loops.
   const cappedXIncrease = Decimal.min(new Decimal(1.2), raw.startXIncrease);
-  return {
+  cachedTier3Bonuses = {
     startFv: raw.startFv,
     startXIncrease: cappedXIncrease,
     startMaxX: raw.startMaxX,
-    permanentAutoUnlock: !!raw.permanentAutoUnlock,
-    autoUpgradeUsesMaxBuy: !!raw.autoUpgradeUsesMaxBuy
+    fvProductionMultiplier: raw.fvProductionMultiplier || new Decimal(1)
   };
+  cachedTier3BonusCount = count;
+  return cachedTier3Bonuses;
 };
 
-const hasPermanentAutoUnlock = () => getTier3StartBonuses().permanentAutoUnlock;
-const hasAutoUpgradeUsesMaxBuy = () => getTier3StartBonuses().autoUpgradeUsesMaxBuy;
+const refreshIntegralCache = () => {
+  const count = Math.max(0, Number(game.integral_count || 0));
+  const cChanged = !cachedIntegralCSource || !game.integral_c.eq(cachedIntegralCSource);
+  if (!cChanged && cachedIntegralCountSource === count) return;
+
+  const tier3 = getTier3StartBonuses();
+  cachedIntegralEffectiveC = Decimal.max(1, game.integral_c.times(tier3.fvProductionMultiplier || 1));
+  cachedIntegralEffectiveCSquare = cachedIntegralEffectiveC.times(cachedIntegralEffectiveC);
+  cachedIntegralCSource = new Decimal(game.integral_c);
+  cachedIntegralCountSource = count;
+};
+
 const getTier2Bonuses = () => getTier2MilestoneBonuses(game.exp_milestone_points);
+const hasPermanentAutoUnlock = () => !!getTier2Bonuses().permanentAutoUnlock;
+const hasAutoUpgradeUsesMaxBuy = () => !!getTier2Bonuses().autoUpgradeUsesMaxBuy;
 const START_LEVEL_CAP = 10;
+const AUTO_IDLE_BACKOFF_MAX_MS = 60000;
+const MAX_X_HARD_CAP = new Decimal(300);
+const MAX_X_SOFTCAP_START = new Decimal(10);
+const MAX_X_SOFTCAP_POWER = 2.2;
+const MAX_X_MIN_GAIN = new Decimal(0.005);
+const PRICE_SPIKE_FACTOR = 10;
+const EXP_PRICE_SPIKE_EVERY = 5;
+
+let cachedTier3BonusCount = null;
+let cachedTier3Bonuses = null;
+
+let cachedIntegralCSource = null;
+let cachedIntegralCountSource = null;
+let cachedIntegralEffectiveC = new Decimal(1);
+let cachedIntegralEffectiveCSquare = new Decimal(1);
+
+const getMaxXUpgradeGain = (currentMaxX) => {
+  const current = new Decimal(currentMaxX || 1);
+  if (current.gte(MAX_X_HARD_CAP)) return new Decimal(0);
+  if (current.lte(MAX_X_SOFTCAP_START)) return new Decimal(1);
+  const reduced = Decimal.pow(MAX_X_SOFTCAP_START.div(current), MAX_X_SOFTCAP_POWER);
+  const clampedReduced = Decimal.max(MAX_X_MIN_GAIN, reduced);
+  return Decimal.min(clampedReduced, MAX_X_HARD_CAP.minus(current));
+};
+
+const getPriceSpikeMultiplier = (level, every = 10) => {
+  const lv = Number(level || 0);
+  if (lv <= 0 || lv % every !== 0) return new Decimal(1);
+  return new Decimal(PRICE_SPIKE_FACTOR);
+};
 
 const getExpUpgradePrice = (upg) => {
-  const tier2 = getTier2Bonuses();
   const scaled = upg.base_price
     .times(EXP_PRICE_BASE_MULT)
     .times(Decimal.pow(EXP_PRICE_GROWTH, upg.level))
-    .times(tier2.expPriceMultiplier)
+    .times(getPriceSpikeMultiplier(upg.level, EXP_PRICE_SPIKE_EVERY))
     .floor();
   return Decimal.max(MIN_EXP_REBIRTH_PRICE, scaled);
 };
@@ -133,7 +185,7 @@ const applyStartingXUpgradeLevels = (tier2) => {
       let multiplier = 1.5;
       if (lv <= 10) multiplier = 1.1;
       else if (lv <= 50) multiplier = 1.25;
-      upg.price = Decimal.max(1, upg.price.times(multiplier).times(tier2.xUpgradePriceMultiplier).ceil());
+      upg.price = Decimal.max(1, upg.price.times(multiplier).times(getPriceSpikeMultiplier(lv)).ceil());
     }
     upg.level = levels;
   });
@@ -146,19 +198,19 @@ const applyRunStartState = (tier2) => {
   game.fv = new Decimal(10).plus(t3Bonus.startFv).plus(t2Start.startFv);
   game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
   game.current_x = new Decimal(0);
-  game.max_x = new Decimal(1).plus(t3Bonus.startMaxX);
+  game.max_x = Decimal.min(MAX_X_HARD_CAP, new Decimal(1).plus(t3Bonus.startMaxX));
   game.x_increase = Decimal.min(game.max_x, new Decimal(0.05).plus(t3Bonus.startXIncrease));
 
   Object.values(game.x_upgrades).forEach(upg => {
     upg.level = 0;
-    upg.price = Decimal.pow(10, upg.id + 1).times(tier2.xUpgradePriceMultiplier).ceil();
+    upg.price = Decimal.pow(10, upg.id + 1).ceil();
   });
   applyStartingXUpgradeLevels(tier2);
 
   game.other_upgrades[0].level = 0;
-  game.other_upgrades[0].price = new Decimal(1000).times(tier2.fxUpgradePriceMultiplier).ceil();
+  game.other_upgrades[0].price = new Decimal(1000);
   game.other_upgrades[1].level = 0;
-  game.other_upgrades[1].price = new Decimal(100).times(tier2.fxUpgradePriceMultiplier).ceil();
+  game.other_upgrades[1].price = new Decimal(100);
 };
 
 const getUpgradeCurrency = (upg) => upg.currency || (upg.type === 'ddx' ? 'DX' : 'FV');
@@ -243,6 +295,46 @@ export const setAlertCallbacks = (alertCb, confirmCb) => {
 
 const canDifferentiateNow = () => game.fv.gte('1e10');
 
+const isAutoDifferentiateUnlocked = () => {
+  const auto = game.auto_upgrades.find((a) => a.targetType === 'differentiate');
+  if (!auto || !auto.active) return false;
+  return hasPermanentAutoUnlock() || game.differentiationCount.gte(auto.unlockedAt);
+};
+
+const isAutoDifferentiateConditionMet = () => {
+  const cfg = game.auto_diff || {};
+  const mode = cfg.mode || 'dx';
+  if (mode === 'off') return false;
+  if (!canDifferentiateNow()) return false;
+
+  const fvThreshold = new Decimal(cfg.fv_threshold || '1e20');
+  const fvReady = game.fv.gte(fvThreshold);
+  if (mode === 'fv') return fvReady;
+
+  const dxThreshold = new Decimal(cfg.dx_threshold || '1e6');
+  const expectedDx = differentiate(game.fx, game.prestige_x);
+  const dxReady = expectedDx.gte(dxThreshold);
+
+  if (mode === 'dx') return dxReady;
+  if (mode === 'either') return fvReady || dxReady;
+  return false;
+};
+
+const tryAutoDifferentiateByCondition = () => {
+  if (!isAutoDifferentiateUnlocked()) return false;
+
+  const now = Date.now();
+  const cooldownMs = Math.max(200, Number(game.auto_diff?.cooldown_ms || 1500));
+  const lastAt = Number(game.auto_diff?.last_trigger_at || 0);
+  if (now - lastAt < cooldownMs) return false;
+  if (!isAutoDifferentiateConditionMet()) return false;
+
+  const result = performDifferentiation();
+  if (!result) return false;
+  game.auto_diff.last_trigger_at = now;
+  return true;
+};
+
 const performDifferentiation = () => {
   // Hard guard: never allow differentiation below requirement, regardless of UI state.
   if (!canDifferentiateNow()) return null;
@@ -302,7 +394,7 @@ export const buyUpgrade = (upg) => {
         multiplier = 1.25;
       }
       
-      upg.price = Decimal.max(1, upg.price.times(multiplier).times(tier2.xUpgradePriceMultiplier).ceil());
+      upg.price = Decimal.max(1, upg.price.times(multiplier).times(getPriceSpikeMultiplier(upg.level)).ceil());
 
       makefx();
     }
@@ -312,17 +404,31 @@ export const buyUpgrade = (upg) => {
 export const buyOtherUpgrade = (upg) => {
   let price = new Decimal(upg.price);
   const currency = getUpgradeCurrency(upg);
-  const tier2 = getTier2Bonuses();
   if (upg.type ==='fx' && game.fv.gte(price)){
+    if (upg.id === 0) {
+      const gainPreview = getMaxXUpgradeGain(game.max_x);
+      if (gainPreview.lte(0)) {
+        upg.level = "MAX";
+        upg.price = new Decimal("1e9999");
+        return;
+      }
+    }
+
     game.fv = game.fv.minus(price);
     upg.level++;
     if (upg.id === 0) {
-      game.max_x = game.max_x.plus(1);
+      const gain = getMaxXUpgradeGain(game.max_x);
+      game.max_x = Decimal.min(MAX_X_HARD_CAP, game.max_x.plus(gain));
       game.x_increase = game.x_increase.times(1.1);
-      upg.price = Decimal.max(1, price.times(1.6).times(tier2.fxUpgradePriceMultiplier).floor());
+      if (game.x_increase.gt(game.max_x)) game.x_increase = game.max_x;
+      upg.price = Decimal.max(1, price.times(1.6).times(getPriceSpikeMultiplier(upg.level)).floor());
+      if (game.max_x.gte(MAX_X_HARD_CAP)) {
+        upg.level = "MAX";
+        upg.price = new Decimal("1e9999");
+      }
     } else if (upg.id === 1) {
       game.x_increase = game.x_increase.plus(0.01);
-      upg.price = Decimal.max(1, price.times(1.6).times(tier2.fxUpgradePriceMultiplier).floor());
+      upg.price = Decimal.max(1, price.times(1.6).times(getPriceSpikeMultiplier(upg.level)).floor());
       if (upg.level >= 100) {
         game.x_increase = game.max_x;
         upg.level = "MAX";
@@ -334,14 +440,14 @@ export const buyOtherUpgrade = (upg) => {
     upg.level++;
     if (upg.id === 0) {
       game.prestige_x = game.prestige_x.plus(0.1);
-      upg.price = price.times(1.5).floor();
+      upg.price = Decimal.max(1, price.times(1.5).times(getPriceSpikeMultiplier(upg.level)).floor());
     } else if (upg.id === 1) {
       const canReduceAny = game.auto_upgrades.some(auto => auto.interval > 100);
       if (canReduceAny) {
         game.auto_upgrades.forEach(auto => {
           auto.interval = Math.max(100, Math.floor(auto.interval * 0.8));
         });
-        upg.price = price.times(2).floor();
+        upg.price = Decimal.max(1, price.times(2).times(getPriceSpikeMultiplier(upg.level)).floor());
       } else {
         upg.level = "MAX";
         upg.price = new Decimal("1e9999");
@@ -378,12 +484,23 @@ export const buyExpUpgrade = (upg) => {
 
 export const performTier2Reset = () => {
   const tier2 = getTier2Bonuses();
-  const t3Bonus = getTier3StartBonuses();
+  const keepAutoProgress = hasPermanentAutoUnlock();
+  const preservedIntervals = keepAutoProgress
+    ? game.auto_upgrades.map((auto) => Number(auto.interval || 1000))
+    : null;
+  const preservedAutoOptimizeLevel = keepAutoProgress ? game.other_upgrades[3].level : null;
+  const preservedAutoOptimizePrice = keepAutoProgress ? new Decimal(game.other_upgrades[3].price) : null;
+
   applyRunStartState(tier2);
   game.other_upgrades[2].level = 0;
   game.other_upgrades[2].price = new Decimal(10);
-  game.other_upgrades[3].level = 0;
-  game.other_upgrades[3].price = new Decimal(5);
+  if (keepAutoProgress) {
+    game.other_upgrades[3].level = preservedAutoOptimizeLevel;
+    game.other_upgrades[3].price = preservedAutoOptimizePrice;
+  } else {
+    game.other_upgrades[3].level = 0;
+    game.other_upgrades[3].price = new Decimal(5);
+  }
 
   game.dx_points = new Decimal(0);
   game.ap_points = new Decimal(0);
@@ -391,10 +508,17 @@ export const performTier2Reset = () => {
   game.differentiationCount = new Decimal(0);
   game.prestige_x = new Decimal(1);
 
-  game.auto_upgrades[0].interval = 10000;
-  game.auto_upgrades[1].interval = 2000;
-  game.auto_upgrades[2].interval = 5000;
-  if (t3Bonus.permanentAutoUnlock) {
+  if (keepAutoProgress && preservedIntervals) {
+    game.auto_upgrades.forEach((auto, index) => {
+      auto.interval = Math.max(100, Number(preservedIntervals[index] || auto.interval));
+    });
+  } else {
+    game.auto_upgrades[0].interval = 10000;
+    game.auto_upgrades[1].interval = 2000;
+    game.auto_upgrades[2].interval = 5000;
+  }
+
+  if (hasPermanentAutoUnlock()) {
     game.auto_upgrades.forEach(auto => {
       auto.active = true;
     });
@@ -434,7 +558,7 @@ export const integrate_bt = () => {
       game.integral_count += 1;
       
       performTier3Reset();
-      showAlertFn(`적분 환생이 완료되었습니다!\n이제 최종 생산량에 × ${format(getIntegralMultiplier())} 적분 배율이 적용됩니다.`, '적분 환생');
+      showAlertFn(`적분 환생이 완료되었습니다!\n현재 적용 C 값: ${format(getIntegralBonusValue())}`, '적분 환생');
     }, "적분 환생 확인");
   } else {
     showAlertFn("적분 환생을 하려면 최소 2.00 의 Exp 증폭이 필요합니다.", '알림');
@@ -442,63 +566,270 @@ export const integrate_bt = () => {
 };
 
 // DX는 기본 생산량을 보정하고, 적분은 최종 생산량을 증폭해 역할을 분리한다.
-export const getIntegralDivisor = () => Math.max(1, 10 - game.integral_count);
-const getIntegralMultiplier = () => game.integral_c.div(getIntegralDivisor()).plus(1);
+export const getIntegralBonusValue = () => {
+  refreshIntegralCache();
+  return cachedIntegralEffectiveC;
+};
+const applyIntegralFormula = (postExpBaseValue) => {
+  refreshIntegralCache();
+  // (base + C) * C = base*C + C^2 로 전개해 Decimal 연산 수를 줄인다.
+  return postExpBaseValue.times(cachedIntegralEffectiveC).plus(cachedIntegralEffectiveCSquare);
+};
+
+const getPostExpBaseGain = () => {
+  let baseGain = equation_calc(game.fx, game.max_x);
+  if (baseGain.lt(1)) baseGain = new Decimal(1);
+  if (game.dx_multiplier.gt(0)) baseGain = baseGain.plus(game.dx_multiplier);
+  if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
+  return baseGain.pow(game.exp_multiplier || 1);
+};
+
+const getXUpgradePriceMultiplierByLevel = (level) => {
+  if (level <= 10) return 1.1;
+  if (level <= 50) return 1.25;
+  return 1.5;
+};
+
+const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
+  let remaining = new Decimal(budget);
+  let price = new Decimal(upg.price);
+  let nextLevel = Number(upg.level || 0);
+  let nextFx = new Decimal(game.fx[upg.id] || 0);
+  let bought = 0;
+
+  // Hard cap to avoid pathological loops on extreme saves.
+  for (let i = 0; i < 50000; i++) {
+    if (remaining.lt(price)) break;
+    remaining = remaining.minus(price);
+    bought += 1;
+    nextLevel += 1;
+
+    nextFx = nextFx.plus(1);
+    if (nextLevel % 10 === 0) nextFx = nextFx.times(2).floor();
+    else if (nextLevel % 5 === 0) nextFx = nextFx.times(1.5).floor();
+
+    const mult = getXUpgradePriceMultiplierByLevel(nextLevel);
+    price = Decimal.max(1, price.times(mult).times(getPriceSpikeMultiplier(nextLevel)).ceil());
+  }
+
+  return {
+    bought,
+    spent: budget.minus(remaining),
+    nextPrice: price,
+    nextLevel,
+    nextFx
+  };
+};
+
+const simulateMaxOtherUpgradePurchase = (upg, budget, tier2) => {
+  if (upg.level === 'MAX') return { bought: 0, spent: new Decimal(0), nextPrice: new Decimal(upg.price), nextLevel: upg.level };
+
+  let remaining = new Decimal(budget);
+  let price = new Decimal(upg.price);
+  let nextLevel = Number(upg.level || 0);
+  let bought = 0;
+  let hitsMax = false;
+  let simulatedMaxX = new Decimal(game.max_x);
+  let totalMaxXGain = new Decimal(0);
+  let nextXIncrease = new Decimal(game.x_increase);
+
+  let intervals = game.auto_upgrades.map((a) => Number(a.interval || 10000));
+
+  for (let i = 0; i < 50000; i++) {
+    if (upg.type === 'fx' && upg.id === 0) {
+      const gainPreview = getMaxXUpgradeGain(simulatedMaxX);
+      if (gainPreview.lte(0)) {
+        nextLevel = 'MAX';
+        price = new Decimal('1e9999');
+        hitsMax = true;
+        break;
+      }
+    }
+
+    if (remaining.lt(price) || hitsMax) break;
+    remaining = remaining.minus(price);
+    bought += 1;
+    nextLevel += 1;
+
+    if (upg.type === 'fx') {
+      if (upg.id === 0) {
+        const gain = getMaxXUpgradeGain(simulatedMaxX);
+        totalMaxXGain = totalMaxXGain.plus(gain);
+        simulatedMaxX = Decimal.min(MAX_X_HARD_CAP, simulatedMaxX.plus(gain));
+        nextXIncrease = nextXIncrease.times(1.1);
+        if (nextXIncrease.gt(simulatedMaxX)) nextXIncrease = simulatedMaxX;
+        price = Decimal.max(1, price.times(1.6).times(getPriceSpikeMultiplier(nextLevel)).floor());
+        if (simulatedMaxX.gte(MAX_X_HARD_CAP)) {
+          nextLevel = 'MAX';
+          price = new Decimal('1e9999');
+          hitsMax = true;
+        }
+      } else if (upg.id === 1) {
+        price = Decimal.max(1, price.times(1.6).times(getPriceSpikeMultiplier(nextLevel)).floor());
+        if (nextLevel >= 100) {
+          nextLevel = 'MAX';
+          price = new Decimal('1e9999');
+          hitsMax = true;
+        }
+      }
+    } else if (upg.type === 'ddx') {
+      if (upg.id === 0) {
+        price = Decimal.max(1, price.times(1.5).times(getPriceSpikeMultiplier(nextLevel)).floor());
+      } else if (upg.id === 1) {
+        const canReduceAny = intervals.some((v) => v > 100);
+        if (canReduceAny) {
+          intervals = intervals.map((v) => Math.max(100, Math.floor(v * 0.8)));
+          price = Decimal.max(1, price.times(2).times(getPriceSpikeMultiplier(nextLevel)).floor());
+        } else {
+          nextLevel = 'MAX';
+          price = new Decimal('1e9999');
+          hitsMax = true;
+        }
+      }
+    }
+  }
+
+  return {
+    bought,
+    spent: budget.minus(remaining),
+    nextPrice: price,
+    nextLevel,
+    intervals,
+    totalMaxXGain,
+    nextXIncrease,
+    simulatedMaxX
+  };
+};
 
 export const buyMaxUpgrade = (upg) => {
-  while (game.fv.gte(upg.price)) { buyUpgrade(upg); }
+  if (!upg || upg.type !== 'add' || !game.fv.gte(upg.price)) return;
+  const tier2 = getTier2Bonuses();
+  const result = simulateMaxXUpgradePurchase(upg, game.fv, tier2);
+  if (result.bought <= 0) return;
+
+  game.fv = game.fv.minus(result.spent);
+  upg.level = result.nextLevel;
+  upg.price = result.nextPrice;
+  game.fx[upg.id] = result.nextFx;
+  makefx();
 };
 
 export const buyMaxOtherUpgrade = (upg) => {
-  while (true) {
-    if (upg.level === "MAX") break;
-    let price = new Decimal(upg.price);
-    if (upg.type === 'fx' && game.fv.gte(price)) buyOtherUpgrade(upg);
-    else if (upg.type === 'ddx' && getCurrencyAmount(getUpgradeCurrency(upg)).gte(price)) buyOtherUpgrade(upg);
-    else break;
+  if (!upg || upg.level === 'MAX') return;
+
+  const tier2 = getTier2Bonuses();
+  const currency = getUpgradeCurrency(upg);
+  const budget = getCurrencyAmount(currency);
+  if (budget.lt(upg.price)) return;
+
+  const result = simulateMaxOtherUpgradePurchase(upg, budget, tier2);
+  if (result.bought <= 0) return;
+
+  spendCurrency(currency, result.spent);
+  upg.level = result.nextLevel;
+  upg.price = result.nextPrice;
+
+  if (upg.type === 'fx') {
+    if (upg.id === 0) {
+      game.max_x = Decimal.min(MAX_X_HARD_CAP, game.max_x.plus(result.totalMaxXGain || 0));
+      game.x_increase = Decimal.min(game.max_x, result.nextXIncrease || game.x_increase);
+    } else if (upg.id === 1) {
+      if (upg.level === 'MAX') {
+        game.x_increase = game.max_x;
+      } else {
+        game.x_increase = game.x_increase.plus(new Decimal(0.01).times(result.bought));
+      }
+    }
+  } else if (upg.type === 'ddx') {
+    if (upg.id === 0) {
+      game.prestige_x = game.prestige_x.plus(new Decimal(0.1).times(result.bought));
+    } else if (upg.id === 1 && result.intervals) {
+      game.auto_upgrades.forEach((auto, index) => {
+        auto.interval = result.intervals[index] || auto.interval;
+      });
+    }
   }
 };
 
 export const buyMaxAllOtherUpgrades = (type) => {
-  let attempts = 0;
-  while (attempts < 100) {
-    let upgrades = Object.values(game.other_upgrades).filter(u => u.type === type && u.level !== "MAX");
-    if (upgrades.length === 0) break;
-    let affordable = upgrades.filter(u => getCurrencyAmount(getUpgradeCurrency(u)).gte(u.price));
-    if (affordable.length === 0) break;
-    let cheapest = affordable.reduce((prev, curr) => new Decimal(curr.price).lt(new Decimal(prev.price)) ? curr : prev);
-    if (getCurrencyAmount(getUpgradeCurrency(cheapest)).gte(cheapest.price)) buyOtherUpgrade(cheapest);
-    else break;
-    attempts++;
-  }
+  const upgrades = Object.values(game.other_upgrades)
+    .filter((u) => u.type === type && u.level !== 'MAX')
+    .sort((a, b) => {
+      const ap = new Decimal(a.price);
+      const bp = new Decimal(b.price);
+      if (ap.lt(bp)) return -1;
+      if (ap.gt(bp)) return 1;
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+
+  upgrades.forEach((upg) => {
+    if (getCurrencyAmount(getUpgradeCurrency(upg)).gte(upg.price)) {
+      buyMaxOtherUpgrade(upg);
+    }
+  });
 };
 
 export const performAutoUpgrade = (auto) => {
   if (auto.targetType === 'differentiate') {
     if (canDifferentiateNow()) {
       performDifferentiation();
+      return true;
     }
-    return;
+    return false;
   }
 
+  let changed = false;
   if (hasAutoUpgradeUsesMaxBuy()) {
     if (auto.targetType === 'x_upgrades') {
-      Object.values(game.x_upgrades).reverse().forEach(upg => buyMaxUpgrade(upg));
+      Object.values(game.x_upgrades).reverse().forEach(upg => {
+        const before = Number(upg.level || 0);
+        buyMaxUpgrade(upg);
+        if (Number(upg.level || 0) > before) changed = true;
+      });
     } else if (auto.targetType === 'other_upgrades_fx') {
+      const before = Object.values(game.other_upgrades)
+        .filter(u => u.type === 'fx')
+        .reduce((sum, u) => sum + (u.level === 'MAX' ? 999999 : Number(u.level || 0)), 0);
       buyMaxAllOtherUpgrades('fx');
+      const after = Object.values(game.other_upgrades)
+        .filter(u => u.type === 'fx')
+        .reduce((sum, u) => sum + (u.level === 'MAX' ? 999999 : Number(u.level || 0)), 0);
+      changed = after > before;
     } else if (auto.targetType === 'other_upgrades_ddx') {
+      const before = Object.values(game.other_upgrades)
+        .filter(u => u.type === 'ddx')
+        .reduce((sum, u) => sum + (u.level === 'MAX' ? 999999 : Number(u.level || 0)), 0);
       buyMaxAllOtherUpgrades('ddx');
+      const after = Object.values(game.other_upgrades)
+        .filter(u => u.type === 'ddx')
+        .reduce((sum, u) => sum + (u.level === 'MAX' ? 999999 : Number(u.level || 0)), 0);
+      changed = after > before;
     }
-    return;
+    return changed;
   }
 
   if (auto.targetType === 'x_upgrades') {
-    Object.values(game.x_upgrades).reverse().forEach(upg => buyUpgrade(upg));
+    Object.values(game.x_upgrades).reverse().forEach(upg => {
+      const before = Number(upg.level || 0);
+      buyUpgrade(upg);
+      if (Number(upg.level || 0) > before) changed = true;
+    });
   } else if (auto.targetType === 'other_upgrades_fx') {
-    Object.values(game.other_upgrades).forEach(upg => { if (upg.type === 'fx') buyOtherUpgrade(upg); });
+    Object.values(game.other_upgrades).forEach(upg => {
+      if (upg.type !== 'fx') return;
+      const before = upg.level;
+      buyOtherUpgrade(upg);
+      if (before !== upg.level) changed = true;
+    });
   } else if (auto.targetType === 'other_upgrades_ddx') {
-    Object.values(game.other_upgrades).forEach(upg => { if (upg.type === 'ddx') buyOtherUpgrade(upg); });
+    Object.values(game.other_upgrades).forEach(upg => {
+      if (upg.type !== 'ddx') return;
+      const before = upg.level;
+      buyOtherUpgrade(upg);
+      if (before !== upg.level) changed = true;
+    });
   }
+  return changed;
 };
 
 export const autoTick = () => {
@@ -506,9 +837,19 @@ export const autoTick = () => {
   const permanentAuto = hasPermanentAutoUnlock();
   game.auto_upgrades.forEach(auto => {
     if (auto.active && (permanentAuto || game.differentiationCount.gte(auto.unlockedAt))) {
+      if (auto.targetType === 'differentiate') return;
+      if (auto.idleUntil && now < auto.idleUntil) return;
       if (now - auto.lastTick >= auto.interval) {
         auto.lastTick = now;
-        performAutoUpgrade(auto);
+        const changed = performAutoUpgrade(auto);
+        if (changed) {
+          auto.idleStreak = 0;
+          auto.idleUntil = 0;
+        } else {
+          auto.idleStreak = Math.min(8, Number(auto.idleStreak || 0) + 1);
+          const backoff = Math.min(AUTO_IDLE_BACKOFF_MAX_MS, auto.interval * Math.pow(2, auto.idleStreak));
+          auto.idleUntil = now + backoff;
+        }
       }
     }
   });
@@ -526,34 +867,33 @@ export const manualTick = () => {
     showAlertFn("적분 함수가 해금되었습니다! Integral 탭을 확인하세요.", '알림');
   }
 
-  // 기본 생산량은 f(x) 계산값만 사용
-  let baseGain = equation_calc(game.fx, game.max_x);
-  if (baseGain.lt(1)) baseGain = new Decimal(1); 
-  
-  if (game.dx_multiplier.gt(0)) {
-    baseGain = baseGain.plus(game.dx_multiplier);
-  }
-  
-  if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
-  
-  // 지수 효과 적용 (승수)
-  let gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
-  gainPerCycle = gainPerCycle.times(getIntegralMultiplier());
+  // 원함수(미분/DX, 2x, 지수 적용 후)에 적분 식을 적용한다.
+  let gainPerCycle = applyIntegralFormula(getPostExpBaseGain());
   const cyclesPerTick = game.x_increase.div(game.max_x);
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
 
+  let completedCycle = false;
   if (game.x_increase.gte(game.max_x)) {
     game.fv = game.fv.plus(gainPerCycle);
     game.stats.total_fv = game.stats.total_fv.plus(gainPerCycle);
     game.current_x = new Decimal(0);
+    completedCycle = true;
   } else {
     game.current_x = game.current_x.plus(game.x_increase);
     if (game.current_x.gte(game.max_x)) {
       game.fv = game.fv.plus(gainPerCycle);
       game.stats.total_fv = game.stats.total_fv.plus(gainPerCycle);
       game.current_x = new Decimal(0);
+      completedCycle = true;
     }
   }
+
+  if (completedCycle && tryAutoDifferentiateByCondition()) {
+    game.stats.play_time += 0.1;
+    autoTick();
+    return;
+  }
+
   game.stats.play_time += 0.1;
   autoTick();
 };
@@ -572,8 +912,9 @@ export const loadGame = () => {
   game.save_version = loadedVersion;
   game.fv = new Decimal(data.fv || 10);
   game.current_x = new Decimal(data.current_x || 0);
-  game.max_x = new Decimal(data.max_x || 1);
+  game.max_x = Decimal.min(MAX_X_HARD_CAP, new Decimal(data.max_x || 1));
   game.x_increase = new Decimal(data.x_increase || 0.05);
+  if (game.x_increase.gt(game.max_x)) game.x_increase = game.max_x;
   game.prestige_x = new Decimal(data.prestige_x || 1);
   game.dx_points = new Decimal(data.dx_points || 0);
   game.ap_points = new Decimal(data.ap_points || 0);
@@ -588,6 +929,13 @@ export const loadGame = () => {
   game.unlocked_integral = data.unlocked_integral || false;
   game.integral_c = new Decimal(data.integral_c || 0);
   game.integral_count = Math.max(0, Number(data.integral_count || 0));
+
+  const savedAutoDiff = data.auto_diff || {};
+  game.auto_diff.mode = ['off', 'fv', 'dx', 'either'].includes(savedAutoDiff.mode) ? savedAutoDiff.mode : 'dx';
+  game.auto_diff.fv_threshold = savedAutoDiff.fv_threshold || '1e20';
+  game.auto_diff.dx_threshold = savedAutoDiff.dx_threshold || '1e6';
+  game.auto_diff.cooldown_ms = Math.max(200, Number(savedAutoDiff.cooldown_ms || 1500));
+  game.auto_diff.last_trigger_at = Number(savedAutoDiff.last_trigger_at || 0);
 
   if (loadedVersion < 2) {
     // Legacy saves had no version marker; milestone bonuses are derived from integral_count.
@@ -625,6 +973,9 @@ export const loadGame = () => {
       if (game.auto_upgrades[index]) {
         game.auto_upgrades[index].active = savedAuto.active;
         game.auto_upgrades[index].lastTick = savedAuto.lastTick || 0;
+        if (savedAuto.interval !== undefined) {
+          game.auto_upgrades[index].interval = Math.max(100, Number(savedAuto.interval || game.auto_upgrades[index].interval));
+        }
       }
     });
   }
@@ -642,17 +993,7 @@ export const loadGame = () => {
     
     // 1분(60초) 이상 오프라인 시 보상 지급
     if (offlineMs > 30000) {
-      let baseGain = equation_calc(game.fx, game.max_x);
-      if (baseGain.lt(1)) baseGain = new Decimal(1); 
-      
-      if (game.dx_multiplier.gt(0)) {
-        baseGain = baseGain.plus(game.dx_multiplier);
-      }
-      
-      if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
-      
-      let gainPerCycle = baseGain.pow(game.exp_multiplier || 1);
-      gainPerCycle = gainPerCycle.times(getIntegralMultiplier());
+      let gainPerCycle = applyIntegralFormula(getPostExpBaseGain());
       const cyclesPerTick = game.x_increase.div(game.max_x);
       const fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10); // 초당 10틱
       
@@ -680,6 +1021,9 @@ export const resetGame = () => {
 
 // 디버깅 및 테스트용 콘솔 명령어
 if (typeof window !== 'undefined') {
+  const getMaxTier2MilestoneAt = () => TIER2_MILESTONES.reduce((max, ms) => Math.max(max, Number(ms.at || 0)), 0);
+  const getMaxTier3MilestoneAt = () => TIER3_MILESTONES.reduce((max, ms) => Math.max(max, Number(ms.at || 0)), 0);
+
   window.debug = {
     addFV: (amount = "1e10") => {
       game.fv = game.fv.plus(amount);
@@ -709,12 +1053,36 @@ if (typeof window !== 'undefined') {
       game.integral_c = game.integral_c.plus(cAmount);
       game.integral_count += 1;
       performTier3Reset();
-      console.log(`3차 환생(적분)이 강제로 실행되었습니다! 현재 적분 상수 C: ${format(game.integral_c)}, 현재 분모: ${getIntegralDivisor()}`);
+      console.log(`3차 환생(적분)이 강제로 실행되었습니다! 현재 적분 상수 C: ${format(game.integral_c)}, 적용 C 값: ${format(getIntegralBonusValue())}`);
     },
     unlockAll: () => {
       game.unlocked_exp = true;
       game.unlocked_integral = true;
       console.log("모든 탭(Exp, Integral)이 해금되었습니다.");
+    },
+    addMilestones: (tier2Points = 1, tier3Integrals = 1) => {
+      const t2 = Math.max(0, Number(tier2Points || 0));
+      const t3 = Math.max(0, Number(tier3Integrals || 0));
+
+      game.exp_milestone_points += t2;
+      game.integral_count += t3;
+      game.unlocked_exp = game.unlocked_exp || game.exp_milestone_points > 0;
+      game.unlocked_integral = game.unlocked_integral || game.integral_count > 0;
+
+      console.log(`마일스톤 포인트 추가 완료: Tier2 +${t2}, Tier3 +${t3} (현재 Tier2=${game.exp_milestone_points}, Tier3=${game.integral_count})`);
+    },
+    unlockAllMilestones: () => {
+      const t2Target = getMaxTier2MilestoneAt();
+      const t3Target = getMaxTier3MilestoneAt();
+      const addT2 = Math.max(0, t2Target - Number(game.exp_milestone_points || 0));
+      const addT3 = Math.max(0, t3Target - Number(game.integral_count || 0));
+
+      game.exp_milestone_points += addT2;
+      game.integral_count += addT3;
+      game.unlocked_exp = true;
+      game.unlocked_integral = true;
+
+      console.log(`모든 마일스톤 해금 완료: Tier2 +${addT2}, Tier3 +${addT3} (목표 Tier2=${t2Target}, Tier3=${t3Target})`);
     },
     tier3: () => {
       const info = getTier3MilestoneState();
@@ -725,7 +1093,8 @@ if (typeof window !== 'undefined') {
         bonuses: {
           startFv: format(info.bonuses.startFv),
           startXIncrease: format(info.bonuses.startXIncrease),
-          startMaxX: format(info.bonuses.startMaxX)
+          startMaxX: format(info.bonuses.startMaxX),
+          fvProductionMultiplier: format(info.bonuses.fvProductionMultiplier)
         }
       });
     },
@@ -738,6 +1107,8 @@ debug.addAP("100")      - AP 재화 추가 (기본값 100)
 debug.forceTier2("0.7") - 즉시 2차 환생 트리거 & Exp 배율 획득
 debug.forceTier3("100") - 즉시 3차 환생 트리거 & 적분 상수(C) 획득
 debug.unlockAll()       - 모든 탭 해금
+debug.addMilestones(5, 3) - 마일스톤 포인트/횟수 물리적 추가 (Tier2, Tier3)
+debug.unlockAllMilestones() - 모든 Tier2/Tier3 마일스톤 즉시 해금
 debug.tier3()           - 3티어 마일스톤/보너스 상태 출력
       `);
     }

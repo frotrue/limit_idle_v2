@@ -1,19 +1,18 @@
 export const TIER2_MILESTONES = [
-  { id: 'e1', at: 1, name: 'Spark of Growth', bonus: { extraExpX: 0.01, xUpgradePriceMultiplier: 0.96, startFv: '1e3' } },
-  { id: 'e2', at: 3, name: 'Efficient Evolution', bonus: { expPriceMultiplier: 0.9, fxUpgradePriceMultiplier: 0.95, startFv: '1e4' } },
-  { id: 'e3', at: 6, name: 'Derivative Resonance', bonus: { apGainMultiplier: 1.25, xUpgradePriceMultiplier: 0.94, startXUpgradeLevels: { 0: 3, 1: 3 } } },
-  { id: 'e4', at: 10, name: 'Exponential Instinct', bonus: { extraExpX: 0.02, fxUpgradePriceMultiplier: 0.92, startXUpgradeLevels: { 0: 2, 1: 2 } } },
-  { id: 'e5', at: 15, name: 'Deep Evolution', bonus: { expPriceMultiplier: 0.75, apGainMultiplier: 1.5, xUpgradePriceMultiplier: 0.9, fxUpgradePriceMultiplier: 0.9, startXUpgradeLevels: { 2: 2 } } }
+  { id: 'e1', at: 1, name: 'Spark of Growth', bonus: { extraExpX: 0.01, startFv: '1e3' } },
+  { id: 'e2', at: 3, name: 'Efficient Evolution', bonus: { startFv: '1e4' } },
+  { id: 'e3', at: 6, name: 'Derivative Resonance', bonus: { apGainMultiplier: 1.25, startXUpgradeLevels: { 0: 3, 1: 3 } } },
+  { id: 'e4', at: 10, name: 'Exponential Instinct', bonus: { extraExpX: 0.02, startXUpgradeLevels: { 0: 2, 1: 2 }, permanentAutoUnlock: true } },
+  { id: 'e5', at: 15, name: 'Deep Evolution', bonus: { apGainMultiplier: 1.5, startXUpgradeLevels: { 2: 2 }, autoUpgradeUsesMaxBuy: true } }
 ];
 
 const ZERO_BONUS = {
   extraExpX: 0,
-  expPriceMultiplier: 1,
   apGainMultiplier: 1,
-  xUpgradePriceMultiplier: 1,
-  fxUpgradePriceMultiplier: 1,
   startFv: '0',
-  startXUpgradeLevels: {}
+  startXUpgradeLevels: {},
+  permanentAutoUnlock: false,
+  autoUpgradeUsesMaxBuy: false
 };
 
 export const getUnlockedTier2Milestones = (points) => {
@@ -26,10 +25,7 @@ export const getTier2MilestoneBonuses = (points) => {
   return unlocked.reduce((acc, milestone) => {
     const b = milestone.bonus || {};
     if (b.extraExpX) acc.extraExpX += b.extraExpX;
-    if (b.expPriceMultiplier) acc.expPriceMultiplier *= b.expPriceMultiplier;
     if (b.apGainMultiplier) acc.apGainMultiplier *= b.apGainMultiplier;
-    if (b.xUpgradePriceMultiplier) acc.xUpgradePriceMultiplier *= b.xUpgradePriceMultiplier;
-    if (b.fxUpgradePriceMultiplier) acc.fxUpgradePriceMultiplier *= b.fxUpgradePriceMultiplier;
     if (b.startFv) acc.startFv = (Number(acc.startFv) + Number(b.startFv)).toString();
     if (b.startXUpgradeLevels) {
       Object.keys(b.startXUpgradeLevels).forEach((id) => {
@@ -37,6 +33,8 @@ export const getTier2MilestoneBonuses = (points) => {
         acc.startXUpgradeLevels[id] = (acc.startXUpgradeLevels[id] || 0) + n;
       });
     }
+    if (b.permanentAutoUnlock) acc.permanentAutoUnlock = true;
+    if (b.autoUpgradeUsesMaxBuy) acc.autoUpgradeUsesMaxBuy = true;
     return acc;
   }, { ...ZERO_BONUS });
 };

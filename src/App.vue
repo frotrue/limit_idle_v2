@@ -142,11 +142,12 @@ made by frotrue
           <div class="upgrade-grid">
             <div v-for="auto in game.auto_upgrades" :key="auto.id"
                  class="upg-card-mini"
-                 :class="{ 'locked': !tier3MilestoneState.bonuses.permanentAutoUnlock && game.differentiationCount.lt(auto.unlockedAt) }">
+                 :class="{ 'locked': !tier2MilestoneState.bonuses.permanentAutoUnlock && game.differentiationCount.lt(auto.unlockedAt) }">
               <div class="upg-name">{{ auto.name }}</div>
               
-              <template v-if="tier3MilestoneState.bonuses.permanentAutoUnlock || game.differentiationCount.gte(auto.unlockedAt)">
-                <div class="upg-level">Interval: {{ formatAutoInterval(auto.interval) }}</div>
+              <template v-if="tier2MilestoneState.bonuses.permanentAutoUnlock || game.differentiationCount.gte(auto.unlockedAt)">
+                <div v-if="auto.targetType !== 'differentiate'" class="upg-level">Interval: {{ formatAutoInterval(auto.interval) }}</div>
+                <div v-else class="upg-level">Condition: {{ autoDiffConditionLabel }}</div>
                 <button class="sub-btn"
                         :style="{ backgroundColor: auto.active ? '#5e81ac' : '#1a1a1e', width: '100%' }"
                         @click="auto.active = !auto.active">
@@ -158,6 +159,47 @@ made by frotrue
                   Unlock at {{ auto.unlockedAt }} Diffs
                 </div>
               </template>
+            </div>
+          </div>
+
+          <div class="stats-container" style="margin-top: 14px;">
+            <div class="stats-item" style="display:block; border-bottom:none; padding-bottom:0;">
+              <div class="stats-label" style="margin-bottom: 8px;">Auto Differentiate Settings</div>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <select v-model="game.auto_diff.mode" class="sub-input">
+                  <option value="off">OFF (비활성)</option>
+                  <option value="fv">FV 임계치</option>
+                  <option value="dx">예상 DX 임계치</option>
+                  <option value="either">FV 또는 DX 임계치</option>
+                </select>
+
+                <input
+                  v-if="['fv', 'either'].includes(game.auto_diff.mode)"
+                  v-model="game.auto_diff.fv_threshold"
+                  class="sub-input"
+                  type="text"
+                  placeholder="FV threshold (예: 1e20)"
+                />
+
+                <input
+                  v-if="['dx', 'either'].includes(game.auto_diff.mode)"
+                  v-model="game.auto_diff.dx_threshold"
+                  class="sub-input"
+                  type="text"
+                  placeholder="DX threshold (예: 1e6)"
+                />
+
+                <input
+                  v-model.number="game.auto_diff.cooldown_ms"
+                  class="sub-input"
+                  type="number"
+                  min="200"
+                  step="100"
+                  placeholder="Cooldown ms"
+                />
+
+                <div class="exp-desc">현재 설정: {{ autoDiffConditionLabel }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -213,16 +255,17 @@ made by frotrue
         <div v-if="activeTab === 'integral'" class="tab-pane">
           <div class="exp-header-card" style="background-color: #2F3241;">
             <div class="label" style="color: #A3BE8C;">INTEGRAL MULTIPLIER</div>
-            <div class="exp-resource-display" style="color: #A3BE8C;">× {{ format(game.integral_c.div(getIntegralDivisor()).plus(1)) }}</div>
-            <div class="exp-desc">적분 효과: 최종 생산량 × (1 + C / {{ getIntegralDivisor() }})</div>
-            <div class="exp-desc" style="margin-top: 5px; color: #A3BE8C;">적분 횟수: {{ game.integral_count }}회 (최소 분모 1)</div>
+            <div class="exp-resource-display" style="color: #A3BE8C;">C = {{ format(getIntegralBonusValue()) }}</div>
+            <div class="exp-desc">적분 효과: (원함수 + C) × C</div>
+            <div class="exp-desc" style="margin-top: 5px; color: #A3BE8C;">원함수는 DX/2x/지수 계산까지 반영된 값입니다.</div>
+            <div class="exp-desc" style="margin-top: 5px; color: #A3BE8C;">적분 횟수: {{ game.integral_count }}회</div>
             <div class="exp-desc" style="margin-top: 5px; color: #88c0d0;">
               리셋 시작 보너스: +{{ format(tier3MilestoneState.bonuses.startFv) }} FV,
               +{{ format(tier3MilestoneState.bonuses.startXIncrease) }} x 증가,
               +{{ format(tier3MilestoneState.bonuses.startMaxX) }} Max x
             </div>
-            <div v-if="tier3MilestoneState.bonuses.permanentAutoUnlock" class="exp-desc" style="margin-top: 5px; color: #a3be8c;">
-              영구 자동화 활성: 모든 자동 업그레이드 잠금이 영구 해제됩니다.
+            <div class="exp-desc" style="margin-top: 5px; color: #a3be8c;">
+              FV 생산 보너스: ×{{ format(tier3MilestoneState.bonuses.fvProductionMultiplier || 1) }}
             </div>
           </div>
 
@@ -343,7 +386,7 @@ import {
   buyUpgrade, buyOtherUpgrade, buyExpUpgrade,
   buyMaxUpgrade, buyMaxOtherUpgrade,
   buyMaxAllOtherUpgrades,
-  getIntegralDivisor, canIntegrate,
+  getIntegralBonusValue, canIntegrate,
   getTier2MilestoneState, getTier2MilestoneTable,
   getTier3MilestoneState, getTier3MilestoneTable,
   setAlertCallbacks, manualTick, saveGame, loadGame, resetGame
@@ -359,6 +402,17 @@ const tier2MilestoneState = computed(() => getTier2MilestoneState())
 const tier2MilestoneTable = computed(() => getTier2MilestoneTable())
 const tier3MilestoneState = computed(() => getTier3MilestoneState())
 const tier3MilestoneTable = computed(() => getTier3MilestoneTable())
+const autoDiffConditionLabel = computed(() => {
+  const mode = game.auto_diff?.mode || 'dx'
+  const fv = game.auto_diff?.fv_threshold || '1e20'
+  const dx = game.auto_diff?.dx_threshold || '1e6'
+  const cooldown = Math.max(200, Number(game.auto_diff?.cooldown_ms || 1500))
+
+  if (mode === 'off') return `OFF / 쿨다운 ${cooldown}ms`
+  if (mode === 'fv') return `FV >= ${fv} / 쿨다운 ${cooldown}ms`
+  if (mode === 'dx') return `예상 DX >= ${dx} / 쿨다운 ${cooldown}ms`
+  return `FV >= ${fv} 또는 예상 DX >= ${dx} / 쿨다운 ${cooldown}ms`
+})
 
 const expGainPreview = () => {
   const base = 0.04
@@ -379,6 +433,8 @@ const tier2MilestoneEffectText = (bonus = {}) => {
       .join(', ')
     if (levels) chunks.push(`시작 레벨 보너스: ${levels}`)
   }
+  if (bonus.permanentAutoUnlock) chunks.push('자동 업그레이드 영구 잠금 해제')
+  if (bonus.autoUpgradeUsesMaxBuy) chunks.push('자동 업그레이드가 Buy Max 방식으로 동작')
   return chunks.join(' / ') || '보상 없음'
 }
 
@@ -387,8 +443,7 @@ const milestoneEffectText = (bonus = {}) => {
   if (bonus.startFv) chunks.push(`시작 FV +${format(bonus.startFv)}`)
   if (bonus.startXIncrease) chunks.push(`시작 x 증가 +${format(bonus.startXIncrease)}`)
   if (bonus.startMaxX) chunks.push(`시작 Max x +${format(bonus.startMaxX)}`)
-  if (bonus.permanentAutoUnlock) chunks.push('자동 업그레이드 영구 잠금 해제')
-  if (bonus.autoUpgradeUsesMaxBuy) chunks.push('자동 업그레이드가 Buy Max 방식으로 동작')
+  if (bonus.fvProductionMultiplier) chunks.push(`FV 생산량 x${Number(bonus.fvProductionMultiplier).toFixed(2)}`)
   return chunks.join(' / ') || '보상 없음'
 }
 
@@ -611,7 +666,7 @@ onMounted(() => {
     console.log("Not in a Cordova/Capacitor environment.");
   }
 
-  setInterval(manualTick, 100);
+  setInterval(manualTick, 150);
   setInterval(saveGame, 30000);
 })
 </script>
@@ -678,6 +733,7 @@ onMounted(() => {
 .upg-level { font-size: 0.7rem; color: #5e81ac; }
 .settings-group { display: flex; flex-direction: column; gap: 10px; }
 .sub-btn { padding: 15px; border-radius: 10px; border: 1px solid #333; background: #1a1a1e; color: white; cursor: pointer; font-family: inherit; }
+.sub-input { padding: 10px; border-radius: 8px; border: 1px solid #333; background: #121216; color: #e5e9f0; font-family: inherit; }
 .sub-btn.danger { border-color: #bf616a; color: #bf616a; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .buy-max-btn { background: #2e3440; border: 1px solid #4c566a; color: #eceff4; padding: 4px 12px; border-radius: 8px; font-size: 0.7rem; cursor: pointer; }

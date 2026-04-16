@@ -6,9 +6,9 @@ export const TIER3_MILESTONES = [
   { id: 'm3', at: 4, name: 'Wider Domain', bonus: { startMaxX: 2 } },
   { id: 'm4', at: 6, name: 'Flow Boost', bonus: { startFv: '1e5', startXIncrease: '0.08' } },
   { id: 'm5', at: 8, name: 'Domain II', bonus: { startMaxX: 3 } },
-  { id: 'm6', at: 10, name: 'Perpetual Automation', bonus: { permanentAutoUnlock: true } },
+  { id: 'm6', at: 10, name: 'Integral Momentum', bonus: { fvProductionMultiplier: '1.25' } },
   { id: 'm7', at: 12, name: 'Hyper Start', bonus: { startFv: '1e6', startXIncrease: '0.12' } },
-  { id: 'm8', at: 14, name: 'Auto Buy-Max Protocol', bonus: { autoUpgradeUsesMaxBuy: true } },
+  { id: 'm8', at: 14, name: 'Flux Acceleration', bonus: { fvProductionMultiplier: '1.35' } },
   { id: 'm9', at: 16, name: 'Domain III', bonus: { startMaxX: 5 } }
 ];
 
@@ -16,8 +16,7 @@ const ZERO_BONUS = {
   startFv: new Decimal(0),
   startXIncrease: new Decimal(0),
   startMaxX: new Decimal(0),
-  permanentAutoUnlock: false,
-  autoUpgradeUsesMaxBuy: false
+  fvProductionMultiplier: new Decimal(1)
 };
 
 export const getUnlockedTier3Milestones = (integralCount) => {
@@ -33,8 +32,7 @@ export const getTier3MilestoneBonuses = (integralCount) => {
     if (b.startFv) acc.startFv = acc.startFv.plus(new Decimal(b.startFv));
     if (b.startXIncrease) acc.startXIncrease = acc.startXIncrease.plus(new Decimal(b.startXIncrease));
     if (b.startMaxX) acc.startMaxX = acc.startMaxX.plus(new Decimal(b.startMaxX));
-    if (b.permanentAutoUnlock) acc.permanentAutoUnlock = true;
-    if (b.autoUpgradeUsesMaxBuy) acc.autoUpgradeUsesMaxBuy = true;
+    if (b.fvProductionMultiplier) acc.fvProductionMultiplier = acc.fvProductionMultiplier.times(new Decimal(b.fvProductionMultiplier));
     return acc;
   }, { ...ZERO_BONUS });
 };
