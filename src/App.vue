@@ -670,7 +670,7 @@ onMounted(() => {
     console.log("Not in a Cordova/Capacitor environment.");
   }
 
-  setInterval(manualTick, 150);
+  setInterval(manualTick, 100);
   setInterval(saveGame, 30000);
 })
 </script>

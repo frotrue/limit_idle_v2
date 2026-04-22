@@ -3,6 +3,9 @@ import Decimal from 'break_eternity.js';
 import { equationCalc, differentiateEquation, integrateEquationAt } from './calc.js';
 import { TIER3_MILESTONES, getTier3MilestoneBonuses, getTier3MilestoneProgress } from './tier3/milestones.js';
 import { TIER2_MILESTONES, getTier2MilestoneBonuses, getTier2MilestoneProgress } from './tier2/milestones.js';
+import { SUPERSCRIPT_MAP, format } from './utils.js';
+
+export { SUPERSCRIPT_MAP, format };
 
 const SAVE_VERSION = 2;
 const EXP_PRICE_BASE_MULT = 3;
@@ -10,17 +13,6 @@ const EXP_PRICE_GROWTH = 12;
 const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
 const EXP_REBIRTH_BASE_GAIN = 0.05;
 const INTEGRAL_UNLOCK_EXP_REQ = 1.5;
-
-export const SUPERSCRIPT_MAP = {
-  0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴',
-  5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸' ,9: '⁹',
-};
-
-export const format = (num) => {
-  const d = new Decimal(num);
-  if (d.lt(1000)) return d.toNumber() % 1 === 0 ? d.toNumber() : d.toNumber().toFixed(2);
-  return d.toExponential(2).replace(/\+/g, '');
-};
 
 export const game = reactive({
   save_version: SAVE_VERSION,
@@ -127,6 +119,7 @@ const MAX_X_SOFTCAP_POWER = 2.2;
 const MAX_X_MIN_GAIN = new Decimal(0.005);
 const PRICE_SPIKE_FACTOR = 10;
 const EXP_PRICE_SPIKE_EVERY = 5;
+const MAX_BUY_SIMULATION_STEPS = 50000;
 
 let cachedTier3BonusCount = null;
 let cachedTier3Bonuses = null;
@@ -187,6 +180,7 @@ const applyStartingXUpgradeLevels = (tier2) => {
       let multiplier = 1.5;
       if (lv <= 10) multiplier = 1.1;
       else if (lv <= 50) multiplier = 1.25;
+      else if (lv <= 100) multiplier = 1.35;
       upg.price = Decimal.max(1, upg.price.times(multiplier).times(getPriceSpikeMultiplier(lv)).ceil());
     }
     upg.level = levels;
@@ -324,10 +318,11 @@ const isAutoDifferentiateConditionMet = () => {
   return false;
 };
 
-const tryAutoDifferentiateByCondition = () => {
+const tryAutoDifferentiateByCondition = (nowMs = Date.now()) => {
   if (!isAutoDifferentiateUnlocked()) return false;
+  if ((game.auto_diff?.mode || 'dx') === 'off') return false;
 
-  const now = Date.now();
+  const now = nowMs;
   const cooldownMs = Math.max(200, Number(game.auto_diff?.cooldown_ms || 1500));
   const lastAt = Number(game.auto_diff?.last_trigger_at || 0);
   if (now - lastAt < cooldownMs) return false;
@@ -399,11 +394,13 @@ export const buyUpgrade = (upg) => {
       }
       
       // 가격 스케일링: 초반에는 덜 오르게, 후반으로 갈수록 1.5배로 수렴되도록
-      // 10레벨 이하: 1.1배 / 50레벨 이하: 1.25배 / 그 이후: 1.5배
-      let multiplier = 1.5;
+      // 10레벨 이하: 1.1배 / 50레벨 이하: 1.2배 / 100레벨 이하: 1.25배 / 그 이후: 1.35배
+      let multiplier = 1.35;
       if (upg.level <= 10) {
         multiplier = 1.1;
       } else if (upg.level <= 50) {
+        multiplier = 1.2;
+      } else if (upg.level <= 100) {
         multiplier = 1.25;
       }
       
@@ -600,8 +597,9 @@ const getPostExpBaseGain = () => {
 
 const getXUpgradePriceMultiplierByLevel = (level) => {
   if (level <= 10) return 1.1;
-  if (level <= 50) return 1.25;
-  return 1.5;
+  if (level <= 50) return 1.2;
+  if (level <= 100) return 1.25;
+  return 1.35;
 };
 
 const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
@@ -611,19 +609,71 @@ const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
   let nextFx = new Decimal(game.fx[upg.id] || 0);
   let bought = 0;
 
-  // Hard cap to avoid pathological loops on extreme saves.
-  for (let i = 0; i < 50000; i++) {
-    if (remaining.lt(price)) break;
-    remaining = remaining.minus(price);
-    bought += 1;
-    nextLevel += 1;
+  // 등비수열 합 공식을 활용한 O(1) 블록 계산 로직 적용
+  // 기존의 반복문을 제거하고, 배수가 변하거나 비용 스파이크가 발생하는 구간을 묶어 일괄 계산합니다.
+  while (remaining.gte(price) && bought < MAX_BUY_SIMULATION_STEPS) {
+    let nextTargetLevel = nextLevel + 1;
+    let mult = getXUpgradePriceMultiplierByLevel(nextTargetLevel);
+    let spikeMult = getPriceSpikeMultiplier(nextTargetLevel);
 
-    nextFx = nextFx.plus(1);
-    if (nextLevel % 10 === 0) nextFx = nextFx.times(2).floor();
-    else if (nextLevel % 5 === 0) nextFx = nextFx.times(1.5).floor();
+    // 일괄 구매 가능한 최대 레벨(현재 스케일링 구간 및 스파이크를 벗어나지 않는 범위) 계산
+    let distToSpike = EXP_PRICE_SPIKE_EVERY - (nextLevel % EXP_PRICE_SPIKE_EVERY);
+    let distToShift = Infinity;
+    if (nextLevel < 10) distToShift = 10 - nextLevel;
+    else if (nextLevel < 50) distToShift = 50 - nextLevel;
+    else if (nextLevel < 100) distToShift = 100 - nextLevel;
 
-    const mult = getXUpgradePriceMultiplierByLevel(nextLevel);
-    price = Decimal.max(1, price.times(mult).times(getPriceSpikeMultiplier(nextLevel)).ceil());
+    let maxBulk = Math.min(distToSpike, distToShift);
+    if (spikeMult.gt(1) && distToSpike === EXP_PRICE_SPIKE_EVERY) {
+      maxBulk = 1; // 스파이크가 발생한 레벨은 단일 계산 처리
+    }
+
+    let r = mult;
+    let affordable = maxBulk;
+
+    // 공식: 등비수열의 합 = a(r^n - 1) / (r - 1)
+    if (r > 1) {
+      let maxKLog = remaining.times(r - 1).div(price).plus(1).log10().toNumber() / Math.log10(r);
+      let maxK = isNaN(maxKLog) ? 0 : Math.floor(maxKLog);
+      if (maxK < affordable) affordable = Math.max(1, maxK);
+    } else {
+      let maxK = remaining.div(price).floor().toNumber();
+      if (maxK < affordable) affordable = Math.max(1, maxK);
+    }
+
+    let bulkCost;
+    if (r > 1) {
+      // 정확도를 위해 floor() 대신 누적값 계산 보정
+      bulkCost = price.times( Decimal.pow(r, affordable).minus(1) ).div( r - 1 ).ceil();
+    } else {
+      bulkCost = price.times(affordable).ceil();
+    }
+
+    if (remaining.lt(bulkCost)) {
+      // 실수 연산 오차로 인한 fallback
+      if (affordable > 1) {
+        affordable -= 1;
+        bulkCost = price.times( Decimal.pow(r, affordable).minus(1) ).div( r - 1 ).ceil();
+      } else {
+        break;
+      }
+    }
+
+    remaining = remaining.minus(bulkCost);
+    bought += affordable;
+
+    // 함수 2배/1.5배 보너스는 O(1) 공식을 적용하기 까다로우므로 해당 구간을 압축 반복하여 적용
+    for (let j = 1; j <= affordable; j++) {
+      let lv = nextLevel + j;
+      nextFx = nextFx.plus(1);
+      if (lv % 10 === 0) nextFx = nextFx.times(2).floor();
+      else if (lv % 5 === 0) nextFx = nextFx.times(1.5).floor();
+    }
+
+    nextLevel += affordable;
+    price = price.times(Decimal.pow(r, affordable)).times(spikeMult).ceil();
+
+    if (affordable < maxBulk) break;
   }
 
   return {
@@ -846,8 +896,8 @@ export const performAutoUpgrade = (auto) => {
   return changed;
 };
 
-export const autoTick = () => {
-  const now = Date.now();
+export const autoTick = (nowMs = Date.now()) => {
+  const now = nowMs;
   const permanentAuto = hasPermanentAutoUnlock();
   game.auto_upgrades.forEach(auto => {
     if (auto.active && (permanentAuto || game.differentiationCount.gte(auto.unlockedAt))) {
@@ -1000,28 +1050,53 @@ export const loadGame = () => {
   }
   makefx();
 
-  // 오프라인 보상(Offline Progress) 계산 로직
+  // 오프라인 보상(Offline Progress) 시뮬레이션 계산 로직
   if (data.lastTick) {
     const now = Date.now();
     const offlineMs = now - data.lastTick;
     
-    // 1분(60초) 이상 오프라인 시 보상 지급
-    if (offlineMs > 30000) {
-      let gainPerCycle = applyIntegralFormula(getPostExpBaseGain());
-      const cyclesPerTick = game.x_increase.div(game.max_x);
-      const fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10); // 초당 10틱
-      
+    if (offlineMs > 60000) {
+      const maxSteps = 1000;
+      let stepMs = Math.max(100, Math.floor(offlineMs / maxSteps));
+      let steps = Math.floor(offlineMs / stepMs);
+      let remainderMs = offlineMs % stepMs;
+
+      let simulatedNow = data.lastTick;
+      let initialTotalFv = new Decimal(game.stats.total_fv);
+
+      for (let i = 0; i < steps; i++) {
+        simulatedNow += stepMs;
+        let gainPerCycle = applyIntegralFormula(getPostExpBaseGain());
+        let stepCycles = game.x_increase.div(game.max_x).times(stepMs / 100);
+        let stepGain = gainPerCycle.times(stepCycles);
+
+        game.fv = game.fv.plus(stepGain);
+        game.stats.total_fv = game.stats.total_fv.plus(stepGain);
+        game.stats.play_time += stepMs / 1000;
+
+        autoTick(simulatedNow);
+        tryAutoDifferentiateByCondition(simulatedNow);
+      }
+
+      if (remainderMs > 0) {
+        simulatedNow += remainderMs;
+        let gainPerCycle = applyIntegralFormula(getPostExpBaseGain());
+        let stepCycles = game.x_increase.div(game.max_x).times(remainderMs / 100);
+        let stepGain = gainPerCycle.times(stepCycles);
+
+        game.fv = game.fv.plus(stepGain);
+        game.stats.total_fv = game.stats.total_fv.plus(stepGain);
+        game.stats.play_time += remainderMs / 1000;
+
+        autoTick(simulatedNow);
+        tryAutoDifferentiateByCondition(simulatedNow);
+      }
+
+      let totalProduced = game.stats.total_fv.minus(initialTotalFv);
       const offlineSecs = offlineMs / 1000;
-      // F-04: 자동화 수준을 고려한 1.5배 보정 계수
-      const offlineMultiplier = 1.5;
-      const totalOfflineGain = fv_per_sec.times(offlineSecs).times(offlineMultiplier);
-      
-      game.fv = game.fv.plus(totalOfflineGain);
-      game.stats.total_fv = game.stats.total_fv.plus(totalOfflineGain);
-      
-      // UI 준비 완료 후 띄우기 위해 1초(1000ms) 뒤 Custom Alert 표시
+
       setTimeout(() => {
-        showAlertFn(`방치 환영합니다!\n${offlineSecs.toFixed(0)}초 동안 오프라인 생산으로\n${format(totalOfflineGain)} FV를 획득했습니다.`, '오프라인 보상');
+        showAlertFn(`방치 환영합니다!\n${offlineSecs.toFixed(0)}초 동안의 정밀 오프라인 시뮬레이션 완료:\n총 약 ${format(totalProduced)} FV 생산 (모든 자동 기능 반영됨)`, '오프라인 보상');
       }, 1000);
     }
   }
