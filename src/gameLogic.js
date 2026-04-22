@@ -8,6 +8,8 @@ const SAVE_VERSION = 2;
 const EXP_PRICE_BASE_MULT = 3;
 const EXP_PRICE_GROWTH = 12;
 const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
+const EXP_REBIRTH_BASE_GAIN = 0.05;
+const INTEGRAL_UNLOCK_EXP_REQ = 1.5;
 
 export const SUPERSCRIPT_MAP = {
   0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴',
@@ -43,8 +45,8 @@ export const game = reactive({
   other_upgrades: {
     0: { id: 0, name: 'Upgrade max x', price: new Decimal(1000), type: 'fx', level: 0 },
     1: { id: 1, name: 'Upgrade x increase', price: new Decimal(100), type: 'fx', level: 0 },
-    2: { id: 0, name: 'Increase x in f\'(x)', price: new Decimal(10), type:'ddx', currency: 'DX', level: 0 },
-    3: { id: 1, name: 'Optimize All Auto Intervals', price: new Decimal(5), type:'ddx', currency: 'AP', level: 0 }
+    2: { id: 2, name: 'Increase x in f\'(x)', price: new Decimal(10), type:'ddx', currency: 'DX', level: 0 },
+    3: { id: 3, name: 'Optimize All Auto Intervals', price: new Decimal(5), type:'ddx', currency: 'AP', level: 0 }
   },
   prestige_x: new Decimal(1),
   dx_points: new Decimal(0),
@@ -108,7 +110,7 @@ const refreshIntegralCache = () => {
   if (!cChanged && cachedIntegralCountSource === count) return;
 
   const tier3 = getTier3StartBonuses();
-  cachedIntegralEffectiveC = Decimal.max(1, game.integral_c.times(tier3.fvProductionMultiplier || 1));
+  cachedIntegralEffectiveC = Decimal.max(0, game.integral_c.times(tier3.fvProductionMultiplier || 1));
   cachedIntegralEffectiveCSquare = cachedIntegralEffectiveC.times(cachedIntegralEffectiveC);
   cachedIntegralCSource = new Decimal(game.integral_c);
   cachedIntegralCountSource = count;
@@ -143,7 +145,7 @@ const getMaxXUpgradeGain = (currentMaxX) => {
   return Decimal.min(clampedReduced, MAX_X_HARD_CAP.minus(current));
 };
 
-const getPriceSpikeMultiplier = (level, every = 10) => {
+const getPriceSpikeMultiplier = (level, every = 15) => {
   const lv = Number(level || 0);
   if (lv <= 0 || lv % every !== 0) return new Decimal(1);
   return new Decimal(PRICE_SPIKE_FACTOR);
@@ -301,6 +303,8 @@ const isAutoDifferentiateUnlocked = () => {
   return hasPermanentAutoUnlock() || game.differentiationCount.gte(auto.unlockedAt);
 };
 
+const getAutoDifferentiateUpgrade = () => game.auto_upgrades.find((a) => a.targetType === 'differentiate');
+
 const isAutoDifferentiateConditionMet = () => {
   const cfg = game.auto_diff || {};
   const mode = cfg.mode || 'dx';
@@ -327,11 +331,20 @@ const tryAutoDifferentiateByCondition = () => {
   const cooldownMs = Math.max(200, Number(game.auto_diff?.cooldown_ms || 1500));
   const lastAt = Number(game.auto_diff?.last_trigger_at || 0);
   if (now - lastAt < cooldownMs) return false;
-  if (!isAutoDifferentiateConditionMet()) return false;
+
+  const auto = getAutoDifferentiateUpgrade();
+  const intervalMs = Math.max(100, Number(auto?.interval || 15000));
+  const lastIntervalTick = Number(auto?.lastTick || 0);
+  const periodReady = now - lastIntervalTick >= intervalMs;
+  const conditionReady = isAutoDifferentiateConditionMet();
+
+  // 유저가 설정한 수치 조건 또는 기간 조건 중 하나라도 만족하면 자동 미분 실행
+  if (!conditionReady && !periodReady) return false;
 
   const result = performDifferentiation();
   if (!result) return false;
   game.auto_diff.last_trigger_at = now;
+  if (auto) auto.lastTick = now;
   return true;
 };
 
@@ -438,10 +451,10 @@ export const buyOtherUpgrade = (upg) => {
   } else if (upg.type ==='ddx' && getCurrencyAmount(currency).gte(price)) {
     spendCurrency(currency, price);
     upg.level++;
-    if (upg.id === 0) {
+    if (upg.id === 2) {
       game.prestige_x = game.prestige_x.plus(0.1);
       upg.price = Decimal.max(1, price.times(1.5).times(getPriceSpikeMultiplier(upg.level)).floor());
-    } else if (upg.id === 1) {
+    } else if (upg.id === 3) {
       const canReduceAny = game.auto_upgrades.some(auto => auto.interval > 100);
       if (canReduceAny) {
         game.auto_upgrades.forEach(auto => {
@@ -469,7 +482,7 @@ export const buyExpUpgrade = (upg) => {
       game.exp_milestone_points += 1;
       const tier2 = getTier2Bonuses();
       // 단일 지수 환생 버튼 기준 기본 증가량
-      let expGain = 0.04;
+      let expGain = EXP_REBIRTH_BASE_GAIN;
       expGain += tier2.extraExpX;
       game.exp_x = game.exp_x.plus(expGain);
       
@@ -543,14 +556,14 @@ export const performTier3Reset = () => {
   saveGame();
 };
 
-export const canIntegrate = () => game.unlocked_integral && game.exp_multiplier.gte(2);
+export const canIntegrate = () => game.unlocked_integral && game.exp_multiplier.gte(INTEGRAL_UNLOCK_EXP_REQ);
 
 export const integrate_bt = () => {
   // 로직 레벨 가드: UI 상태와 무관하게 조건 미달이면 절대 실행되지 않도록 차단
   if (canIntegrate()) {
     let raw_integral = integrate_calc(game.fx, game.max_x);
     // 밸런스를 위해 로그값을 취하거나 일정 비율로 C (IX) 획득
-    let gain = raw_integral.pow(0.1).floor(); 
+    let gain = raw_integral.gt(1) ? Decimal.log10(raw_integral).pow(0.5).floor() : new Decimal(1);
     if (gain.lt(1)) gain = new Decimal(1);
 
     showConfirmFn(`[경고: 적분 (3차 환생)]\n현재까지의 모든 f(x), 미분(DX), 지수(Exp)를 잃는 대신,\n정적분 영역에 비례한 영구 '적분 상수(C)' ${format(gain)} 를 얻습니다.\n\n정말 진행하시겠습니까?`, () => {
@@ -561,7 +574,7 @@ export const integrate_bt = () => {
       showAlertFn(`적분 환생이 완료되었습니다!\n현재 적용 C 값: ${format(getIntegralBonusValue())}`, '적분 환생');
     }, "적분 환생 확인");
   } else {
-    showAlertFn("적분 환생을 하려면 최소 2.00 의 Exp 증폭이 필요합니다.", '알림');
+    showAlertFn(`적분 환생을 하려면 최소 ${INTEGRAL_UNLOCK_EXP_REQ.toFixed(2)} 의 Exp 증폭이 필요합니다.`, '알림');
   }
 };
 
@@ -572,6 +585,7 @@ export const getIntegralBonusValue = () => {
 };
 const applyIntegralFormula = (postExpBaseValue) => {
   refreshIntegralCache();
+  if (cachedIntegralEffectiveC.lte(0)) return postExpBaseValue;
   // (base + C) * C = base*C + C^2 로 전개해 Decimal 연산 수를 줄인다.
   return postExpBaseValue.times(cachedIntegralEffectiveC).plus(cachedIntegralEffectiveCSquare);
 };
@@ -673,9 +687,9 @@ const simulateMaxOtherUpgradePurchase = (upg, budget, tier2) => {
         }
       }
     } else if (upg.type === 'ddx') {
-      if (upg.id === 0) {
+      if (upg.id === 2) {
         price = Decimal.max(1, price.times(1.5).times(getPriceSpikeMultiplier(nextLevel)).floor());
-      } else if (upg.id === 1) {
+      } else if (upg.id === 3) {
         const canReduceAny = intervals.some((v) => v > 100);
         if (canReduceAny) {
           intervals = intervals.map((v) => Math.max(100, Math.floor(v * 0.8)));
@@ -741,9 +755,9 @@ export const buyMaxOtherUpgrade = (upg) => {
       }
     }
   } else if (upg.type === 'ddx') {
-    if (upg.id === 0) {
+    if (upg.id === 2) {
       game.prestige_x = game.prestige_x.plus(new Decimal(0.1).times(result.bought));
-    } else if (upg.id === 1 && result.intervals) {
+    } else if (upg.id === 3 && result.intervals) {
       game.auto_upgrades.forEach((auto, index) => {
         auto.interval = result.intervals[index] || auto.interval;
       });
@@ -862,7 +876,7 @@ export const manualTick = () => {
   }
   
   // 밸런스 조절: 1e5 -> 2
-  if (!game.unlocked_integral && game.exp_multiplier.gte(2)) {
+  if (!game.unlocked_integral && game.exp_multiplier.gte(INTEGRAL_UNLOCK_EXP_REQ)) {
     game.unlocked_integral = true;
     showAlertFn("적분 함수가 해금되었습니다! Integral 탭을 확인하세요.", '알림');
   }
@@ -998,7 +1012,9 @@ export const loadGame = () => {
       const fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10); // 초당 10틱
       
       const offlineSecs = offlineMs / 1000;
-      const totalOfflineGain = fv_per_sec.times(offlineSecs);
+      // F-04: 자동화 수준을 고려한 1.5배 보정 계수
+      const offlineMultiplier = 1.5;
+      const totalOfflineGain = fv_per_sec.times(offlineSecs).times(offlineMultiplier);
       
       game.fv = game.fv.plus(totalOfflineGain);
       game.stats.total_fv = game.stats.total_fv.plus(totalOfflineGain);

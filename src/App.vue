@@ -288,7 +288,7 @@ made by frotrue
                       style="background-color: rgb(32, 25, 30); border-color: #d08770; color: #d08770;">
                 <div class="upg-name">Integrate ∫f(x)dx</div>
                 <div class="upg-desc" style="color: #d08770;">Reset EVERYTHING (including DX and Exp) to gain Integral Constant C</div>
-                <div v-if="!canIntegrateNow" class="upg-desc" style="font-size: 0.7rem; color: #bf616a; margin-top: 4px;">조건: Exp 증폭 2.00 이상</div>
+                <div v-if="!canIntegrateNow" class="upg-desc" style="font-size: 0.7rem; color: #bf616a; margin-top: 4px;">조건: Exp 증폭 1.50 이상</div>
               </button>
             </div>
           </div>
@@ -415,7 +415,7 @@ const autoDiffConditionLabel = computed(() => {
 })
 
 const expGainPreview = () => {
-  const base = 0.04
+  const base = 0.05
   return (base + (tier2MilestoneState.value.bonuses.extraExpX || 0)).toFixed(2)
 }
 
@@ -615,34 +615,38 @@ const buyPermanentBoost = () => {
     return;
   }
 
-  const p1 = store.get(PRODUCT_2X_BOOST);
-  const p2 = store.get(PRODUCT_2X_BOOST_ALT);
+  try {
+    const p1 = store.get(PRODUCT_2X_BOOST);
+    const p2 = store.get(PRODUCT_2X_BOOST_ALT);
 
-  let product = (p1 && p1.canPurchase) ? p1 : (p2 && p2.canPurchase) ? p2 : (p1 || p2);
+    let product = (p1 && p1.canPurchase) ? p1 : (p2 && p2.canPurchase) ? p2 : (p1 || p2);
 
-  if (!product) {
-    showAlert("스토어 상품 정보를 찾을 수 없습니다. 다시 시도해 주세요.");
-    store.update(); // 정보 강제 갱신 요청
-    return;
-  }
-
-  if (product.canPurchase) {
-    // 상품 객체 대신 명시적으로 상품의 ID를 넘기거나, v13+의 경우 offer를 통해 구매를 진행합니다.
-    const offer = product.getOffer ? product.getOffer() : null;
-    if (offer) {
-      store.order(offer);
-    } else {
-      store.order(product.id); // product.id를 사용하도록 수정
+    if (!product) {
+      showAlert("스토어 상품 정보를 찾을 수 없습니다. 다시 시도해 주세요.");
+      store.update();
+      return;
     }
-  } else if (product.owned) {
-    showAlert("이미 구매한 상품입니다.");
-  } else {
-    let msg = "현재 이 앱(기기)에서는 스토어가 상품을 내려주지 않고 있습니다.\n\n";
-    if (p1) msg += `[${p1.id}] state: ${p1.state}\n`;
-    if (p2) msg += `[${p2.id}] state: ${p2.state}\n`;
-    msg += "\n(state가 invalid나 registered면 스토어 서버 측 거부 상태입니다. 테스트 트랙에서 다시 다운로드 해보세요.)";
-    showAlert(msg);
-    store.update();
+
+    if (product.canPurchase) {
+      const offer = product.getOffer ? product.getOffer() : null;
+      if (offer) {
+        store.order(offer);
+      } else {
+        store.order(product.id);
+      }
+    } else if (product.owned) {
+      showAlert("이미 구매한 상품입니다.");
+    } else {
+      let msg = "현재 이 앱(기기)에서는 스토어가 상품을 내려주지 않고 있습니다.\n\n";
+      if (p1) msg += `[${p1.id}] state: ${p1.state}\n`;
+      if (p2) msg += `[${p2.id}] state: ${p2.state}\n`;
+      msg += "\n(state가 invalid나 registered면 스토어 서버 측 거부 상태입니다. 테스트 트랙에서 다시 다운로드 해보세요.)";
+      showAlert(msg);
+      store.update();
+    }
+  } catch (err) {
+    console.error("IAP purchase error:", err);
+    showAlert("구매 처리 중 오류가 발생했습니다: " + (err.message || String(err)));
   }
 }
 

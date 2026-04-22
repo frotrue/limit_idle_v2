@@ -1,3 +1,5 @@
+import Decimal from 'break_eternity.js';
+
 export const TIER2_MILESTONES = [
   { id: 'e1', at: 1, name: 'Spark of Growth', bonus: { extraExpX: 0.01, startFv: '1e3' } },
   { id: 'e2', at: 3, name: 'Efficient Evolution', bonus: { startFv: '1e4' } },
@@ -9,7 +11,7 @@ export const TIER2_MILESTONES = [
 const ZERO_BONUS = {
   extraExpX: 0,
   apGainMultiplier: 1,
-  startFv: '0',
+  startFv: new Decimal(0),
   startXUpgradeLevels: {},
   permanentAutoUnlock: false,
   autoUpgradeUsesMaxBuy: false
@@ -26,7 +28,7 @@ export const getTier2MilestoneBonuses = (points) => {
     const b = milestone.bonus || {};
     if (b.extraExpX) acc.extraExpX += b.extraExpX;
     if (b.apGainMultiplier) acc.apGainMultiplier *= b.apGainMultiplier;
-    if (b.startFv) acc.startFv = (Number(acc.startFv) + Number(b.startFv)).toString();
+    if (b.startFv) acc.startFv = acc.startFv.plus(new Decimal(b.startFv));
     if (b.startXUpgradeLevels) {
       Object.keys(b.startXUpgradeLevels).forEach((id) => {
         const n = Number(b.startXUpgradeLevels[id] || 0);
