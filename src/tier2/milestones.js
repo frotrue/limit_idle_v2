@@ -8,14 +8,14 @@ export const TIER2_MILESTONES = [
   { id: 'e5', at: 15, name: 'Deep Evolution', bonus: { apGainMultiplier: 1.5, startXUpgradeLevels: { 2: 2 }, autoUpgradeUsesMaxBuy: true } }
 ];
 
-const ZERO_BONUS = {
+const freshTier2Bonus = () => ({
   extraExpX: 0,
   apGainMultiplier: 1,
   startFv: new Decimal(0),
   startXUpgradeLevels: {},
   permanentAutoUnlock: false,
   autoUpgradeUsesMaxBuy: false
-};
+});
 
 export const getUnlockedTier2Milestones = (points) => {
   const count = Math.max(0, Number(points || 0));
@@ -38,7 +38,7 @@ export const getTier2MilestoneBonuses = (points) => {
     if (b.permanentAutoUnlock) acc.permanentAutoUnlock = true;
     if (b.autoUpgradeUsesMaxBuy) acc.autoUpgradeUsesMaxBuy = true;
     return acc;
-  }, { ...ZERO_BONUS });
+  }, freshTier2Bonus());
 };
 
 export const getTier2MilestoneProgress = (points) => {

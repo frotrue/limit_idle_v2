@@ -7,7 +7,7 @@ import { SUPERSCRIPT_MAP, format } from './utils.js';
 
 export { SUPERSCRIPT_MAP, format };
 
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 const EXP_PRICE_BASE_MULT = 3;
 const EXP_PRICE_GROWTH = 12;
 const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
@@ -177,10 +177,7 @@ const applyStartingXUpgradeLevels = (tier2) => {
       if (lv % 10 === 0) game.fx[id] = game.fx[id].times(2).floor();
       else if (lv % 5 === 0) game.fx[id] = game.fx[id].times(1.5).floor();
 
-      let multiplier = 1.5;
-      if (lv <= 10) multiplier = 1.1;
-      else if (lv <= 50) multiplier = 1.25;
-      else if (lv <= 100) multiplier = 1.35;
+      let multiplier = getXUpgradePriceMultiplierByLevel(lv);
       upg.price = Decimal.max(1, upg.price.times(multiplier).times(getPriceSpikeMultiplier(lv)).ceil());
     }
     upg.level = levels;
@@ -412,14 +409,15 @@ export const buyUpgrade = (upg) => {
 };
 
 export const buyOtherUpgrade = (upg) => {
+  if (upg.level === 'MAX') return;
   let price = new Decimal(upg.price);
   const currency = getUpgradeCurrency(upg);
   if (upg.type ==='fx' && game.fv.gte(price)){
     if (upg.id === 0) {
       const gainPreview = getMaxXUpgradeGain(game.max_x);
       if (gainPreview.lte(0)) {
-        upg.level = "MAX";
-        upg.price = new Decimal("1e9999");
+        upg.level = 'MAX';
+        upg.price = new Decimal('1e9999');
         return;
       }
     }
@@ -433,16 +431,16 @@ export const buyOtherUpgrade = (upg) => {
       if (game.x_increase.gt(game.max_x)) game.x_increase = game.max_x;
       upg.price = Decimal.max(1, price.times(1.6).times(getPriceSpikeMultiplier(upg.level)).floor());
       if (game.max_x.gte(MAX_X_HARD_CAP)) {
-        upg.level = "MAX";
-        upg.price = new Decimal("1e9999");
+        upg.level = 'MAX';
+        upg.price = new Decimal('1e9999');
       }
     } else if (upg.id === 1) {
       game.x_increase = game.x_increase.plus(0.01);
       upg.price = Decimal.max(1, price.times(1.6).times(getPriceSpikeMultiplier(upg.level)).floor());
       if (upg.level >= 100) {
         game.x_increase = game.max_x;
-        upg.level = "MAX";
-        upg.price = new Decimal("1e9999");
+        upg.level = 'MAX';
+        upg.price = new Decimal('1e9999');
       }
     }
   } else if (upg.type ==='ddx' && getCurrencyAmount(currency).gte(price)) {
@@ -450,7 +448,8 @@ export const buyOtherUpgrade = (upg) => {
     upg.level++;
     if (upg.id === 2) {
       game.prestige_x = game.prestige_x.plus(0.1);
-      upg.price = Decimal.max(1, price.times(1.5).times(getPriceSpikeMultiplier(upg.level)).floor());
+      let mult = 1.5 + Math.floor(upg.level / 50) * 0.1;
+      upg.price = Decimal.max(1, price.times(mult).times(getPriceSpikeMultiplier(upg.level)).floor());
     } else if (upg.id === 3) {
       const canReduceAny = game.auto_upgrades.some(auto => auto.interval > 100);
       if (canReduceAny) {
@@ -459,8 +458,8 @@ export const buyOtherUpgrade = (upg) => {
         });
         upg.price = Decimal.max(1, price.times(2).times(getPriceSpikeMultiplier(upg.level)).floor());
       } else {
-        upg.level = "MAX";
-        upg.price = new Decimal("1e9999");
+        upg.level = 'MAX';
+        upg.price = new Decimal('1e9999');
       }
     }
   }
@@ -484,7 +483,7 @@ export const buyExpUpgrade = (upg) => {
       game.exp_x = game.exp_x.plus(expGain);
       
       upg.price = getExpUpgradePrice(upg);
-      game.exp_multiplier = Decimal.exp(game.exp_x);
+      game.exp_multiplier = new Decimal(1).plus(game.exp_x);
 
       performTier2Reset();
       showAlertFn(`초월 진화가 완료되었습니다!\n이제 f(x)가 ${format(game.exp_multiplier)} 승수만큼 증폭됩니다.`, '초월 진화');
@@ -526,6 +525,7 @@ export const performTier2Reset = () => {
     game.auto_upgrades[0].interval = 10000;
     game.auto_upgrades[1].interval = 2000;
     game.auto_upgrades[2].interval = 5000;
+    game.auto_upgrades[3].interval = 15000;
   }
 
   if (hasPermanentAutoUnlock()) {
@@ -558,17 +558,16 @@ export const canIntegrate = () => game.unlocked_integral && game.exp_multiplier.
 export const integrate_bt = () => {
   // 로직 레벨 가드: UI 상태와 무관하게 조건 미달이면 절대 실행되지 않도록 차단
   if (canIntegrate()) {
-    let raw_integral = integrate_calc(game.fx, game.max_x);
-    // 밸런스를 위해 로그값을 취하거나 일정 비율로 C (IX) 획득
-    let gain = raw_integral.gt(1) ? Decimal.log10(raw_integral).pow(0.5).floor() : new Decimal(1);
+    let logFv = Decimal.max(0, game.fv.log10());
+    let gain = logFv.pow(0.7).floor();
     if (gain.lt(1)) gain = new Decimal(1);
 
-    showConfirmFn(`[경고: 적분 (3차 환생)]\n현재까지의 모든 f(x), 미분(DX), 지수(Exp)를 잃는 대신,\n정적분 영역에 비례한 영구 '적분 상수(C)' ${format(gain)} 를 얻습니다.\n\n정말 진행하시겠습니까?`, () => {
+    showConfirmFn(`[경고: 적분 (3차 환생)]\n현재까지의 모든 f(x), 미분(DX), 지수(Exp)를 잃는 대신,\n영구적인 지수 보너스를 제공하는 '적분 상수(C)' ${format(gain)} 를 얻습니다.\n(C 1당 기본 지수 +0.1)\n\n정말 진행하시겠습니까?`, () => {
       game.integral_c = game.integral_c.plus(gain);
       game.integral_count += 1;
       
       performTier3Reset();
-      showAlertFn(`적분 환생이 완료되었습니다!\n현재 적용 C 값: ${format(getIntegralBonusValue())}`, '적분 환생');
+      showAlertFn(`적분 환생이 완료되었습니다!\n현재 C: ${format(game.integral_c)}, 적용 보너스: +${format(getIntegralBonusValue().times(0.1))}`, '적분 환생');
     }, "적분 환생 확인");
   } else {
     showAlertFn(`적분 환생을 하려면 최소 ${INTEGRAL_UNLOCK_EXP_REQ.toFixed(2)} 의 Exp 증폭이 필요합니다.`, '알림');
@@ -580,26 +579,26 @@ export const getIntegralBonusValue = () => {
   refreshIntegralCache();
   return cachedIntegralEffectiveC;
 };
-const applyIntegralFormula = (postExpBaseValue) => {
-  refreshIntegralCache();
-  if (cachedIntegralEffectiveC.lte(0)) return postExpBaseValue;
-  // (base + C) * C = base*C + C^2 로 전개해 Decimal 연산 수를 줄인다.
-  return postExpBaseValue.times(cachedIntegralEffectiveC).plus(cachedIntegralEffectiveCSquare);
-};
+
 
 const getPostExpBaseGain = () => {
   let baseGain = equation_calc(game.fx, game.max_x);
   if (baseGain.lt(1)) baseGain = new Decimal(1);
   if (game.dx_multiplier.gt(0)) baseGain = baseGain.plus(game.dx_multiplier);
   if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
-  return baseGain.pow(game.exp_multiplier || 1);
+  
+  refreshIntegralCache();
+  const cBonus = cachedIntegralEffectiveC.times(0.1);
+  const totalExp = (game.exp_multiplier || new Decimal(1)).plus(cBonus);
+  
+  return baseGain.pow(totalExp);
 };
 
 const getXUpgradePriceMultiplierByLevel = (level) => {
   if (level <= 10) return 1.1;
   if (level <= 50) return 1.2;
   if (level <= 100) return 1.25;
-  return 1.35;
+  return 1.35 + Math.floor((level - 100) / 50) * 0.1;
 };
 
 const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
@@ -622,6 +621,11 @@ const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
     if (nextLevel < 10) distToShift = 10 - nextLevel;
     else if (nextLevel < 50) distToShift = 50 - nextLevel;
     else if (nextLevel < 100) distToShift = 100 - nextLevel;
+    else {
+      let currentSection = Math.floor((nextLevel - 100) / 50);
+      let nextSectionLevel = 100 + (currentSection + 1) * 50;
+      distToShift = nextSectionLevel - nextLevel;
+    }
 
     let maxBulk = Math.min(distToSpike, distToShift);
     if (spikeMult.gt(1) && distToSpike === EXP_PRICE_SPIKE_EVERY) {
@@ -671,7 +675,9 @@ const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
     }
 
     nextLevel += affordable;
-    price = price.times(Decimal.pow(r, affordable)).times(spikeMult).ceil();
+    // spikeMult는 다음 레벨 기준으로 재계산하여 적용
+    let nextSpikeMult = getPriceSpikeMultiplier(nextLevel, 15);
+    price = price.times(Decimal.pow(r, affordable)).times(nextSpikeMult).ceil();
 
     if (affordable < maxBulk) break;
   }
@@ -738,7 +744,8 @@ const simulateMaxOtherUpgradePurchase = (upg, budget, tier2) => {
       }
     } else if (upg.type === 'ddx') {
       if (upg.id === 2) {
-        price = Decimal.max(1, price.times(1.5).times(getPriceSpikeMultiplier(nextLevel)).floor());
+        let mult = 1.5 + Math.floor(nextLevel / 50) * 0.1;
+        price = Decimal.max(1, price.times(mult).times(getPriceSpikeMultiplier(nextLevel)).floor());
       } else if (upg.id === 3) {
         const canReduceAny = intervals.some((v) => v > 100);
         if (canReduceAny) {
@@ -931,8 +938,7 @@ export const manualTick = () => {
     showAlertFn("적분 함수가 해금되었습니다! Integral 탭을 확인하세요.", '알림');
   }
 
-  // 원함수(미분/DX, 2x, 지수 적용 후)에 적분 식을 적용한다.
-  let gainPerCycle = applyIntegralFormula(getPostExpBaseGain());
+  let gainPerCycle = getPostExpBaseGain();
   const cyclesPerTick = game.x_increase.div(game.max_x);
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
 
@@ -987,12 +993,20 @@ export const loadGame = () => {
   
   game.unlocked_exp = data.unlocked_exp || false;
   game.exp_x = new Decimal(data.exp_x || 0);
-  game.exp_multiplier = new Decimal(data.exp_multiplier || 1);
+  // v3 마이그레이션: exp_multiplier를 exp_x로부터 재계산 (구 공식 e^x → 신 공식 1+x)
+  game.exp_multiplier = new Decimal(1).plus(game.exp_x);
   game.exp_milestone_points = Math.max(0, Number(data.exp_milestone_points || 0));
   
   game.unlocked_integral = data.unlocked_integral || false;
   game.integral_c = new Decimal(data.integral_c || 0);
   game.integral_count = Math.max(0, Number(data.integral_count || 0));
+
+  // 통계 데이터 복원
+  if (data.stats) {
+    game.stats.total_fv = new Decimal(data.stats.total_fv || 0);
+    game.stats.total_dx = new Decimal(data.stats.total_dx || 0);
+    game.stats.play_time = Number(data.stats.play_time || 0);
+  }
 
   const savedAutoDiff = data.auto_diff || {};
   game.auto_diff.mode = ['off', 'fv', 'dx', 'either'].includes(savedAutoDiff.mode) ? savedAutoDiff.mode : 'dx';
@@ -1066,7 +1080,7 @@ export const loadGame = () => {
 
       for (let i = 0; i < steps; i++) {
         simulatedNow += stepMs;
-        let gainPerCycle = applyIntegralFormula(getPostExpBaseGain());
+        let gainPerCycle = getPostExpBaseGain();
         let stepCycles = game.x_increase.div(game.max_x).times(stepMs / 100);
         let stepGain = gainPerCycle.times(stepCycles);
 
@@ -1080,7 +1094,7 @@ export const loadGame = () => {
 
       if (remainderMs > 0) {
         simulatedNow += remainderMs;
-        let gainPerCycle = applyIntegralFormula(getPostExpBaseGain());
+        let gainPerCycle = getPostExpBaseGain();
         let stepCycles = game.x_increase.div(game.max_x).times(remainderMs / 100);
         let stepGain = gainPerCycle.times(stepCycles);
 
@@ -1133,7 +1147,7 @@ if (typeof window !== 'undefined') {
       // 즉시 2차 환생(지수) 효과 부여 및 해금
       game.unlocked_exp = true;
       game.exp_x = game.exp_x.plus(expAmount);
-      game.exp_multiplier = Decimal.exp(game.exp_x);
+      game.exp_multiplier = new Decimal(1).plus(game.exp_x);
       performTier2Reset();
       console.log(`2차 환생(초월)이 강제로 실행되었습니다! 현재 exp_multiplier: ${format(game.exp_multiplier)}`);
     },

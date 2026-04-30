@@ -42,12 +42,10 @@ const emit = defineEmits(['close', 'confirm', 'cancel'])
 
 const confirm = () => {
   emit('confirm')
-  emit('close')
 }
 
 const cancel = () => {
   emit('cancel')
-  emit('close')
 }
 </script>
 

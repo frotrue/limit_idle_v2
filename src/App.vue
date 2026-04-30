@@ -208,9 +208,9 @@ made by frotrue
         <div v-if="activeTab === 'exp'" class="tab-pane">
           <div class="exp-header-card">
             <div class="label">EXPONENTIAL POWER (E)</div>
-            <div class="exp-resource-display">^{{ format(game.exp_multiplier) }}</div>
-            <div class="exp-desc">생산량 증폭: (f(x) + DX)^{{ format(game.exp_multiplier) }}</div>
-            <div class="exp-desc" style="margin-top: 5px; color: #ff79c6;">E = e^{{ format(game.exp_x) }}</div>
+            <div class="exp-resource-display">^{{ format(new Decimal(game.exp_multiplier || 1).plus(getIntegralBonusValue().times(0.1))) }}</div>
+            <div class="exp-desc">생산량 증폭: (f(x) + DX)^{{ format(new Decimal(game.exp_multiplier || 1).plus(getIntegralBonusValue().times(0.1))) }}</div>
+            <div class="exp-desc" style="margin-top: 5px; color: #ff79c6;">기본 지수(E) = 1.0 + {{ format(game.exp_x) }} / 적분 보너스 = +{{ format(getIntegralBonusValue().times(0.1)) }}</div>
             <div class="exp-desc" style="margin-top: 5px; color: #88c0d0;">Tier2 마일스톤 포인트: {{ tier2MilestoneState.count }}</div>
           </div>
 
@@ -256,7 +256,7 @@ made by frotrue
           <div class="exp-header-card" style="background-color: #2F3241;">
             <div class="label" style="color: #A3BE8C;">INTEGRAL MULTIPLIER</div>
             <div class="exp-resource-display" style="color: #A3BE8C;">C = {{ format(getIntegralBonusValue()) }}</div>
-            <div class="exp-desc">적분 효과: (원함수 + C) × C</div>
+            <div class="exp-desc">적분 효과: 영구 기본 지수 +{{ format(getIntegralBonusValue().times(0.1)) }} 증가</div>
             <div class="exp-desc" style="margin-top: 5px; color: #A3BE8C;">원함수는 DX/2x/지수 계산까지 반영된 값입니다.</div>
             <div class="exp-desc" style="margin-top: 5px; color: #A3BE8C;">적분 횟수: {{ game.integral_count }}회</div>
             <div class="exp-desc" style="margin-top: 5px; color: #88c0d0;">
@@ -378,6 +378,7 @@ made by frotrue
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import Decimal from 'break_eternity.js'
 import CustomAlert from './components/CustomAlert.vue'
 
 import {

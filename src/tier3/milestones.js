@@ -12,12 +12,12 @@ export const TIER3_MILESTONES = [
   { id: 'm9', at: 16, name: 'Domain III', bonus: { startMaxX: 5 } }
 ];
 
-const ZERO_BONUS = {
+const freshTier3Bonus = () => ({
   startFv: new Decimal(0),
   startXIncrease: new Decimal(0),
   startMaxX: new Decimal(0),
   fvProductionMultiplier: new Decimal(1)
-};
+});
 
 export const getUnlockedTier3Milestones = (integralCount) => {
   const count = Math.max(0, Number(integralCount || 0));
@@ -34,7 +34,7 @@ export const getTier3MilestoneBonuses = (integralCount) => {
     if (b.startMaxX) acc.startMaxX = acc.startMaxX.plus(new Decimal(b.startMaxX));
     if (b.fvProductionMultiplier) acc.fvProductionMultiplier = acc.fvProductionMultiplier.times(new Decimal(b.fvProductionMultiplier));
     return acc;
-  }, { ...ZERO_BONUS });
+  }, freshTier3Bonus());
 };
 
 export const getTier3MilestoneProgress = (integralCount) => {
