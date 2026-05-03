@@ -1,11 +1,18 @@
 import Decimal from 'break_eternity.js';
 
 export const TIER2_MILESTONES = [
+  // === 초반 (1~6): 기초 환생 보상 ===
   { id: 'e1', at: 1, name: 'Spark of Growth', bonus: { extraExpX: 0.01, startFv: '1e3' } },
   { id: 'e2', at: 3, name: 'Efficient Evolution', bonus: { startFv: '1e4' } },
   { id: 'e3', at: 6, name: 'Derivative Resonance', bonus: { apGainMultiplier: 1.25, startXUpgradeLevels: { 0: 3, 1: 3 } } },
-  { id: 'e4', at: 10, name: 'Exponential Instinct', bonus: { extraExpX: 0.02, startXUpgradeLevels: { 0: 2, 1: 2 }, permanentAutoUnlock: true } },
-  { id: 'e5', at: 15, name: 'Deep Evolution', bonus: { apGainMultiplier: 1.5, startXUpgradeLevels: { 2: 2 }, autoUpgradeUsesMaxBuy: true } }
+  // === 중반 (10~15): 강화 보너스 ===
+  { id: 'e4', at: 10, name: 'Exponential Instinct', bonus: { extraExpX: 0.02, startFv: '1e5', startXUpgradeLevels: { 0: 2, 1: 2 } } },
+  { id: 'e5', at: 15, name: 'Deep Evolution', bonus: { apGainMultiplier: 1.5, startXUpgradeLevels: { 2: 2 }, autoUpgradeUsesMaxBuy: true } },
+  // === 후반 (20~50): 장기 목표 및 강력한 보상 ===
+  { id: 'e6', at: 20, name: 'Veteran\'s Knowledge', bonus: { extraExpX: 0.03, startFv: '1e6', startXUpgradeLevels: { 0: 5, 1: 5, 2: 3 } } },
+  { id: 'e7', at: 30, name: 'Exponential Mastery', bonus: { apGainMultiplier: 2.0, startXUpgradeLevels: { 3: 3 } } },
+  { id: 'e8', at: 40, name: 'Dimensional Insight', bonus: { extraExpX: 0.05, startFv: '1e8' } },
+  { id: 'e9', at: 50, name: 'Transcendent Will', bonus: { apGainMultiplier: 2.5, startXUpgradeLevels: { 0: 10, 1: 10, 2: 5, 3: 5 } } }
 ];
 
 const freshTier2Bonus = () => ({
@@ -13,7 +20,6 @@ const freshTier2Bonus = () => ({
   apGainMultiplier: 1,
   startFv: new Decimal(0),
   startXUpgradeLevels: {},
-  permanentAutoUnlock: false,
   autoUpgradeUsesMaxBuy: false
 });
 
@@ -35,7 +41,6 @@ export const getTier2MilestoneBonuses = (points) => {
         acc.startXUpgradeLevels[id] = (acc.startXUpgradeLevels[id] || 0) + n;
       });
     }
-    if (b.permanentAutoUnlock) acc.permanentAutoUnlock = true;
     if (b.autoUpgradeUsesMaxBuy) acc.autoUpgradeUsesMaxBuy = true;
     return acc;
   }, freshTier2Bonus());
@@ -50,4 +55,3 @@ export const getTier2MilestoneProgress = (points) => {
     unlocked: getUnlockedTier2Milestones(count)
   };
 };
-

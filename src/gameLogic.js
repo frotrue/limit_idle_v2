@@ -4,8 +4,9 @@ import { equationCalc, differentiateEquation, integrateEquationAt } from './calc
 import { TIER3_MILESTONES, getTier3MilestoneBonuses, getTier3MilestoneProgress } from './tier3/milestones.js';
 import { TIER2_MILESTONES, getTier2MilestoneBonuses, getTier2MilestoneProgress } from './tier2/milestones.js';
 import { SUPERSCRIPT_MAP, format } from './utils.js';
+import { AP_RESEARCH_NODES, canPurchaseResearch, getResearchBonuses, isAutoResearched, hasAnyAutoResearch } from './apResearch.js';
 
-export { SUPERSCRIPT_MAP, format };
+export { SUPERSCRIPT_MAP, format, AP_RESEARCH_NODES };
 
 const SAVE_VERSION = 3;
 const EXP_PRICE_BASE_MULT = 3;
@@ -58,6 +59,20 @@ export const game = reactive({
     cooldown_ms: 1500,
     last_trigger_at: 0
   },
+  auto_exp: {
+    active: false,
+    mode: 'always', // always | dx_threshold
+    dx_threshold: '1e15',
+    cooldown_ms: 5000,
+    last_trigger_at: 0
+  },
+  auto_integral: {
+    active: false,
+    mode: 'always', // always | fv_threshold
+    fv_threshold: '1e50',
+    cooldown_ms: 10000,
+    last_trigger_at: 0
+  },
   unlocked_exp: false,
   exp_x: new Decimal(0),
   exp_multiplier: new Decimal(1),
@@ -76,6 +91,7 @@ export const game = reactive({
     fv_per_sec: new Decimal(0)
   },
   is_2x_boost_owned: false,
+  ap_research: [],
   lastTick: Date.now()
 });
 
@@ -109,7 +125,6 @@ const refreshIntegralCache = () => {
 };
 
 const getTier2Bonuses = () => getTier2MilestoneBonuses(game.exp_milestone_points);
-const hasPermanentAutoUnlock = () => !!getTier2Bonuses().permanentAutoUnlock;
 const hasAutoUpgradeUsesMaxBuy = () => !!getTier2Bonuses().autoUpgradeUsesMaxBuy;
 const START_LEVEL_CAP = 10;
 const AUTO_IDLE_BACKOFF_MAX_MS = 60000;
@@ -291,7 +306,7 @@ const canDifferentiateNow = () => game.fv.gte('1e10');
 const isAutoDifferentiateUnlocked = () => {
   const auto = game.auto_upgrades.find((a) => a.targetType === 'differentiate');
   if (!auto || !auto.active) return false;
-  return hasPermanentAutoUnlock() || game.differentiationCount.gte(auto.unlockedAt);
+  return isAutoResearched(auto.id, game.ap_research);
 };
 
 const getAutoDifferentiateUpgrade = () => game.auto_upgrades.find((a) => a.targetType === 'differentiate');
@@ -320,7 +335,9 @@ const tryAutoDifferentiateByCondition = (nowMs = Date.now()) => {
   if ((game.auto_diff?.mode || 'dx') === 'off') return false;
 
   const now = nowMs;
-  const cooldownMs = Math.max(200, Number(game.auto_diff?.cooldown_ms || 1500));
+  const researchBonuses = getResearchBonuses(game.ap_research);
+  const baseCooldown = Math.max(200, Number(game.auto_diff?.cooldown_ms || 1500));
+  const cooldownMs = Math.floor(baseCooldown * researchBonuses.autoDiffCooldownMultiplier);
   const lastAt = Number(game.auto_diff?.last_trigger_at || 0);
   if (now - lastAt < cooldownMs) return false;
 
@@ -330,8 +347,8 @@ const tryAutoDifferentiateByCondition = (nowMs = Date.now()) => {
   const periodReady = now - lastIntervalTick >= intervalMs;
   const conditionReady = isAutoDifferentiateConditionMet();
 
-  // 유저가 설정한 수치 조건 또는 기간 조건 중 하나라도 만족하면 자동 미분 실행
-  if (!conditionReady && !periodReady) return false;
+  // 유저가 설정한 수치 조건과 시간 주기 조건이 모두 충족되어야 자동 미분 실행
+  if (!conditionReady || !periodReady) return false;
 
   const result = performDifferentiation();
   if (!result) return false;
@@ -344,13 +361,17 @@ const performDifferentiation = () => {
   // Hard guard: never allow differentiation below requirement, regardless of UI state.
   if (!canDifferentiateNow()) return null;
 
-  const gain = differentiate(game.fx, game.prestige_x);
+  const rawGain = differentiate(game.fx, game.prestige_x);
   const tier2 = getTier2Bonuses();
+  const researchBonuses = getResearchBonuses(game.ap_research);
+  // AP 연구 DX 배율 적용
+  const gain = rawGain.times(researchBonuses.dxGainMultiplier);
   const apGain = Decimal.max(1, gain.plus(1).log10().floor().times(tier2.apGainMultiplier).floor());
   game.dx_points = game.dx_points.plus(gain);
   game.ap_points = game.ap_points.plus(apGain);
   game.dx_multiplier = game.dx_multiplier.plus(gain);
   game.differentiationCount = game.differentiationCount.plus(1);
+  game.stats.total_dx = game.stats.total_dx.plus(gain);
 
   applyRunStartState(tier2);
 
@@ -390,16 +411,8 @@ export const buyUpgrade = (upg) => {
         game.fx[upg.id] = game.fx[upg.id].times(1.5).floor();
       }
       
-      // 가격 스케일링: 초반에는 덜 오르게, 후반으로 갈수록 1.5배로 수렴되도록
-      // 10레벨 이하: 1.1배 / 50레벨 이하: 1.2배 / 100레벨 이하: 1.25배 / 그 이후: 1.35배
-      let multiplier = 1.35;
-      if (upg.level <= 10) {
-        multiplier = 1.1;
-      } else if (upg.level <= 50) {
-        multiplier = 1.2;
-      } else if (upg.level <= 100) {
-        multiplier = 1.25;
-      }
+      // 가격 스케일링: getXUpgradePriceMultiplierByLevel로 통합 관리
+      let multiplier = getXUpgradePriceMultiplierByLevel(upg.level);
       
       upg.price = Decimal.max(1, upg.price.times(multiplier).times(getPriceSpikeMultiplier(upg.level)).ceil());
 
@@ -493,7 +506,8 @@ export const buyExpUpgrade = (upg) => {
 
 export const performTier2Reset = () => {
   const tier2 = getTier2Bonuses();
-  const keepAutoProgress = hasPermanentAutoUnlock();
+  // 연구 트리로 해금된 자동화는 영구적이므로 간격/설정을 보존
+  const keepAutoProgress = hasAnyAutoResearch(game.ap_research);
   const preservedIntervals = keepAutoProgress
     ? game.auto_upgrades.map((auto) => Number(auto.interval || 1000))
     : null;
@@ -528,11 +542,14 @@ export const performTier2Reset = () => {
     game.auto_upgrades[3].interval = 15000;
   }
 
-  if (hasPermanentAutoUnlock()) {
-    game.auto_upgrades.forEach(auto => {
+  // 연구로 해금된 자동 업그레이드만 활성화 유지
+  game.auto_upgrades.forEach(auto => {
+    if (isAutoResearched(auto.id, game.ap_research)) {
       auto.active = true;
-    });
-  }
+    } else {
+      auto.active = false;
+    }
+  });
 
   makefx();
   saveGame()
@@ -574,6 +591,31 @@ export const integrate_bt = () => {
   }
 };
 
+// AP 연구 트리: 노드 구매
+export const purchaseResearch = (nodeId) => {
+  if (!canPurchaseResearch(nodeId, game.ap_research, game.ap_points)) return false;
+  const node = AP_RESEARCH_NODES.find(n => n.id === nodeId);
+  if (!node) return false;
+  game.ap_points = game.ap_points.minus(node.cost);
+  game.ap_research.push(nodeId);
+
+  // Enhanced Automation 해금 시 즉시 자동 업그레이드 간격에 반영
+  if (nodeId === 'enhanced_auto') {
+    game.auto_upgrades.forEach(auto => {
+      auto.interval = Math.max(100, Math.floor(auto.interval * 0.7));
+    });
+  }
+
+  saveGame();
+  return true;
+};
+
+export const getResearchState = () => {
+  return {
+    unlocked: game.ap_research,
+    bonuses: getResearchBonuses(game.ap_research)
+  };
+};
 // DX는 기본 생산량을 보정하고, 적분은 최종 생산량을 증폭해 역할을 분리한다.
 export const getIntegralBonusValue = () => {
   refreshIntegralCache();
@@ -591,7 +633,21 @@ const getPostExpBaseGain = () => {
   const cBonus = cachedIntegralEffectiveC.times(0.1);
   const totalExp = (game.exp_multiplier || new Decimal(1)).plus(cBonus);
   
-  return baseGain.pow(totalExp);
+  let result = baseGain.pow(totalExp);
+  
+  // Tier 3 마일스톤의 FV 생산 배율 보너스 적용
+  const tier3 = getTier3StartBonuses();
+  if (tier3.fvProductionMultiplier && tier3.fvProductionMultiplier.gt(1)) {
+    result = result.times(tier3.fvProductionMultiplier);
+  }
+  
+  // AP 연구 FV 생산 배율 보너스 적용
+  const researchBonuses = getResearchBonuses(game.ap_research);
+  if (researchBonuses.fvProductionMultiplier.gt(1)) {
+    result = result.times(researchBonuses.fvProductionMultiplier);
+  }
+  
+  return result;
 };
 
 const getXUpgradePriceMultiplierByLevel = (level) => {
@@ -905,9 +961,9 @@ export const performAutoUpgrade = (auto) => {
 
 export const autoTick = (nowMs = Date.now()) => {
   const now = nowMs;
-  const permanentAuto = hasPermanentAutoUnlock();
+  const permanentAuto = hasAnyAutoResearch(game.ap_research);
   game.auto_upgrades.forEach(auto => {
-    if (auto.active && (permanentAuto || game.differentiationCount.gte(auto.unlockedAt))) {
+    if (auto.active && isAutoResearched(auto.id, game.ap_research)) {
       if (auto.targetType === 'differentiate') return;
       if (auto.idleUntil && now < auto.idleUntil) return;
       if (now - auto.lastTick >= auto.interval) {
@@ -924,6 +980,54 @@ export const autoTick = (nowMs = Date.now()) => {
       }
     }
   });
+
+  // AP 연구: 자동 Tier 2 환생
+  const researchBonuses = getResearchBonuses(game.ap_research);
+  if (researchBonuses.hasAutoExp && game.unlocked_exp && game.auto_exp.active) {
+    const expCooldown = Math.max(1000, Number(game.auto_exp.cooldown_ms || 5000));
+    const expLastAt = Number(game.auto_exp.last_trigger_at || 0);
+    if (now - expLastAt >= expCooldown) {
+      const expUpg = game.exp_upgrades[0];
+      let canDoExp = expUpg && game.dx_points.gte(expUpg.price);
+      // 조건 모드 확인
+      if (canDoExp && game.auto_exp.mode === 'dx_threshold') {
+        canDoExp = game.dx_points.gte(new Decimal(game.auto_exp.dx_threshold || '1e15'));
+      }
+      if (canDoExp) {
+        expUpg.level++;
+        game.exp_milestone_points += 1;
+        const tier2 = getTier2Bonuses();
+        let expGain = EXP_REBIRTH_BASE_GAIN + tier2.extraExpX;
+        game.exp_x = game.exp_x.plus(expGain);
+        expUpg.price = getExpUpgradePrice(expUpg);
+        game.exp_multiplier = new Decimal(1).plus(game.exp_x);
+        game.auto_exp.last_trigger_at = now;
+        performTier2Reset();
+      }
+    }
+  }
+
+  // AP 연구: 자동 Tier 3 환생
+  if (researchBonuses.hasAutoIntegral && canIntegrate() && game.auto_integral.active) {
+    const intCooldown = Math.max(1000, Number(game.auto_integral.cooldown_ms || 10000));
+    const intLastAt = Number(game.auto_integral.last_trigger_at || 0);
+    if (now - intLastAt >= intCooldown) {
+      let canDoInt = true;
+      if (game.auto_integral.mode === 'fv_threshold') {
+        canDoInt = game.fv.gte(new Decimal(game.auto_integral.fv_threshold || '1e50'));
+      }
+      if (canDoInt) {
+        let logFv = Decimal.max(0, game.fv.log10());
+        let gain = logFv.pow(0.7).floor();
+        if (gain.gte(1)) {
+          game.integral_c = game.integral_c.plus(gain);
+          game.integral_count += 1;
+          game.auto_integral.last_trigger_at = now;
+          performTier3Reset();
+        }
+      }
+    }
+  }
 };
 
 export const manualTick = () => {
@@ -1001,6 +1105,14 @@ export const loadGame = () => {
   game.integral_c = new Decimal(data.integral_c || 0);
   game.integral_count = Math.max(0, Number(data.integral_count || 0));
 
+  // AP 연구 트리 복원
+  if (Array.isArray(data.ap_research)) {
+    const validIds = AP_RESEARCH_NODES.map(n => n.id);
+    game.ap_research = data.ap_research.filter(id => validIds.includes(id));
+  } else {
+    game.ap_research = [];
+  }
+
   // 통계 데이터 복원
   if (data.stats) {
     game.stats.total_fv = new Decimal(data.stats.total_fv || 0);
@@ -1014,6 +1126,22 @@ export const loadGame = () => {
   game.auto_diff.dx_threshold = savedAutoDiff.dx_threshold || '1e6';
   game.auto_diff.cooldown_ms = Math.max(200, Number(savedAutoDiff.cooldown_ms || 1500));
   game.auto_diff.last_trigger_at = Number(savedAutoDiff.last_trigger_at || 0);
+
+  // 자동 Tier 2 환생 설정 복원
+  const savedAutoExp = data.auto_exp || {};
+  game.auto_exp.active = !!savedAutoExp.active;
+  game.auto_exp.mode = ['always', 'dx_threshold'].includes(savedAutoExp.mode) ? savedAutoExp.mode : 'always';
+  game.auto_exp.dx_threshold = savedAutoExp.dx_threshold || '1e15';
+  game.auto_exp.cooldown_ms = Math.max(1000, Number(savedAutoExp.cooldown_ms || 5000));
+  game.auto_exp.last_trigger_at = Number(savedAutoExp.last_trigger_at || 0);
+
+  // 자동 Tier 3 환생 설정 복원
+  const savedAutoInt = data.auto_integral || {};
+  game.auto_integral.active = !!savedAutoInt.active;
+  game.auto_integral.mode = ['always', 'fv_threshold'].includes(savedAutoInt.mode) ? savedAutoInt.mode : 'always';
+  game.auto_integral.fv_threshold = savedAutoInt.fv_threshold || '1e50';
+  game.auto_integral.cooldown_ms = Math.max(1000, Number(savedAutoInt.cooldown_ms || 10000));
+  game.auto_integral.last_trigger_at = Number(savedAutoInt.last_trigger_at || 0);
 
   if (loadedVersion < 2) {
     // Legacy saves had no version marker; milestone bonuses are derived from integral_count.
@@ -1057,11 +1185,14 @@ export const loadGame = () => {
       }
     });
   }
-  if (hasPermanentAutoUnlock()) {
-    game.auto_upgrades.forEach(auto => {
-      auto.active = true;
-    });
-  }
+  // 연구로 해금된 자동 업그레이드 활성화 복원
+  game.auto_upgrades.forEach(auto => {
+    if (isAutoResearched(auto.id, game.ap_research)) {
+      // 세이브에서 active 상태를 복원했으므로 그대로 유지
+    } else {
+      auto.active = false; // 연구 미해금 자동화는 비활성
+    }
+  });
   makefx();
 
   // 오프라인 보상(Offline Progress) 시뮬레이션 계산 로직
@@ -1081,12 +1212,15 @@ export const loadGame = () => {
 
       let simulatedNow = data.lastTick;
       let initialTotalFv = new Decimal(game.stats.total_fv);
+      // AP 연구: 오프라인 보상 배율
+      const offlineResearch = getResearchBonuses(game.ap_research);
+      const offlineMult = offlineResearch.offlineMultiplier;
 
       for (let i = 0; i < steps; i++) {
         simulatedNow += stepMs;
         let gainPerCycle = getPostExpBaseGain();
         let stepCycles = game.x_increase.div(game.max_x).times(stepMs / 100);
-        let stepGain = gainPerCycle.times(stepCycles);
+        let stepGain = gainPerCycle.times(stepCycles).times(offlineMult);
 
         game.fv = game.fv.plus(stepGain);
         game.stats.total_fv = game.stats.total_fv.plus(stepGain);
@@ -1100,7 +1234,7 @@ export const loadGame = () => {
         simulatedNow += remainderMs;
         let gainPerCycle = getPostExpBaseGain();
         let stepCycles = game.x_increase.div(game.max_x).times(remainderMs / 100);
-        let stepGain = gainPerCycle.times(stepCycles);
+        let stepGain = gainPerCycle.times(stepCycles).times(offlineMult);
 
         game.fv = game.fv.plus(stepGain);
         game.stats.total_fv = game.stats.total_fv.plus(stepGain);

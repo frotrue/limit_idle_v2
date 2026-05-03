@@ -1,15 +1,23 @@
 import Decimal from 'break_eternity.js';
 
 export const TIER3_MILESTONES = [
+  // === 초반 (1~4): 첫 적분 보상, 재시작 쿠션 ===
   { id: 'm1', at: 1, name: 'Warm Start', bonus: { startFv: '5e3', startXIncrease: '0.03' } },
   { id: 'm2', at: 2, name: 'Faster Variable', bonus: { startFv: '2e4', startXIncrease: '0.05' } },
   { id: 'm3', at: 4, name: 'Wider Domain', bonus: { startMaxX: 2 } },
+  // === 중반 (6~10): 생산성 강화 ===
   { id: 'm4', at: 6, name: 'Flow Boost', bonus: { startFv: '1e5', startXIncrease: '0.08' } },
   { id: 'm5', at: 8, name: 'Domain II', bonus: { startMaxX: 3 } },
   { id: 'm6', at: 10, name: 'Integral Momentum', bonus: { fvProductionMultiplier: '1.25' } },
+  // === 중후반 (12~16): 영역 확장 + 생산 부스트 ===
   { id: 'm7', at: 12, name: 'Hyper Start', bonus: { startFv: '1e6', startXIncrease: '0.12' } },
   { id: 'm8', at: 14, name: 'Flux Acceleration', bonus: { fvProductionMultiplier: '1.35' } },
-  { id: 'm9', at: 16, name: 'Domain III', bonus: { startMaxX: 5 } }
+  { id: 'm9', at: 16, name: 'Domain III', bonus: { startMaxX: 5 } },
+  // === 후반 (20~40): 장기 목표 ===
+  { id: 'm10', at: 20, name: 'Integral Surge', bonus: { startFv: '1e8', fvProductionMultiplier: '1.5' } },
+  { id: 'm11', at: 25, name: 'Domain IV', bonus: { startMaxX: 8, startXIncrease: '0.2' } },
+  { id: 'm12', at: 30, name: 'Convergence', bonus: { fvProductionMultiplier: '2.0', startFv: '1e10' } },
+  { id: 'm13', at: 40, name: 'Infinite Horizon', bonus: { startMaxX: 15, startXIncrease: '0.3', fvProductionMultiplier: '2.5' } }
 ];
 
 const freshTier3Bonus = () => ({
@@ -46,4 +54,3 @@ export const getTier3MilestoneProgress = (integralCount) => {
     count
   };
 };
-
