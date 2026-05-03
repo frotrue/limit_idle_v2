@@ -1069,11 +1069,15 @@ export const loadGame = () => {
     const now = Date.now();
     const offlineMs = now - data.lastTick;
     
-    if (offlineMs > 60000) {
-      const maxSteps = 1000;
-      let stepMs = Math.max(100, Math.floor(offlineMs / maxSteps));
+    // 5초 이상 오프라인이면 보상 시뮬레이션 실행 (초반 유저의 짧은 이탈도 보상)
+    if (offlineMs > 5000) {
+      // stepMs를 500ms 이하로 제한하여 자동 업그레이드가 실제 온라인과 유사한 빈도로 발동되도록 함
+      const maxSteps = 5000;
+      let stepMs = Math.max(100, Math.min(500, Math.floor(offlineMs / maxSteps)));
       let steps = Math.floor(offlineMs / stepMs);
-      let remainderMs = offlineMs % stepMs;
+      // 성능 보호: 최대 시뮬레이션 스텝 수 제한
+      if (steps > maxSteps) steps = maxSteps;
+      let remainderMs = offlineMs - (steps * stepMs);
 
       let simulatedNow = data.lastTick;
       let initialTotalFv = new Decimal(game.stats.total_fv);
@@ -1105,6 +1109,9 @@ export const loadGame = () => {
         autoTick(simulatedNow);
         tryAutoDifferentiateByCondition(simulatedNow);
       }
+
+      // 시뮬레이션 후 함수 문자열 동기화
+      makefx();
 
       let totalProduced = game.stats.total_fv.minus(initialTotalFv);
       const offlineSecs = offlineMs / 1000;
