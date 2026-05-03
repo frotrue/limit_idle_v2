@@ -214,39 +214,50 @@ made by frotrue
             <div class="exp-desc" style="margin-top: 5px; color: #88c0d0;">Tier2 마일스톤 포인트: {{ tier2MilestoneState.count }}</div>
           </div>
 
-          <div class="section-header">
-            <div class="section-title">Exponential Rebirth (Tier 2)</div>
-          </div>
-          <div class="upgrade-grid">
-            <button class="upg-card-mini full-row prestige-btn"
-                    :class="{
-                      'can-buy': game.dx_points.gte(game.exp_upgrades[0].price),
-                      'locked': game.dx_points.lt(game.exp_upgrades[0].price)
-                    }"
-                    @click="buyExpUpgrade(game.exp_upgrades[0])">
-              <div class="upg-name">{{ game.exp_upgrades[0].name }}</div>
-              <div class="upg-desc">Increase exp_x by {{ expGainPreview() }} <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
-              <div class="upg-cost">
-                <span class="cost-val">{{ format(game.exp_upgrades[0].price) }}</span>
-                <span class="cost-unit">DX</span>
-              </div>
-              <div class="upg-level">Lv.{{ game.exp_upgrades[0].level }}</div>
+          <nav class="tab-menu" style="margin-bottom: 12px;">
+            <button :class="{ active: expSubTab === 'rebirth' }" @click="expSubTab = 'rebirth'">
+              <span class="tab-label">환생</span>
             </button>
+            <button :class="{ active: expSubTab === 'milestones' }" @click="expSubTab = 'milestones'">
+              <span class="tab-label">마일스톤</span>
+            </button>
+          </nav>
+
+          <div v-if="expSubTab === 'rebirth'">
+            <div class="section-title">Exponential Rebirth (Tier 2)</div>
+            <div class="upgrade-grid">
+              <button class="upg-card-mini full-row prestige-btn"
+                      :class="{
+                        'can-buy': game.dx_points.gte(game.exp_upgrades[0].price),
+                        'locked': game.dx_points.lt(game.exp_upgrades[0].price)
+                      }"
+                      @click="buyExpUpgrade(game.exp_upgrades[0])">
+                <div class="upg-name">{{ game.exp_upgrades[0].name }}</div>
+                <div class="upg-desc">Increase exp_x by {{ expGainPreview() }} <br><span style="color:#bf616a; font-size:0.7em;">(모든 진행도 초기화)</span></div>
+                <div class="upg-cost">
+                  <span class="cost-val">{{ format(game.exp_upgrades[0].price) }}</span>
+                  <span class="cost-unit">DX</span>
+                </div>
+                <div class="upg-level">Lv.{{ game.exp_upgrades[0].level }}</div>
+              </button>
+            </div>
           </div>
 
-          <div class="section-header" style="margin-top: 20px; margin-bottom: 10px;">
-            <div class="section-title">Tier 2 Milestones (영구 유지)</div>
-          </div>
-          <div class="stats-container">
-            <div v-for="ms in tier2MilestoneTable" :key="ms.id" class="stats-item" style="align-items: flex-start; flex-direction: column; gap: 4px;">
-              <span class="stats-label">{{ ms.name }} - 포인트 {{ ms.at }}</span>
-              <span class="exp-desc" style="color: #d8dee9;">{{ tier2MilestoneEffectText(ms.bonus) }}</span>
-              <span class="stats-value" :style="{ color: ms.unlocked ? '#a3be8c' : '#bf616a' }">
-                {{ ms.unlocked ? '해금 완료' : `남은 포인트: ${ms.remaining}` }}
-              </span>
+          <div v-else>
+            <div class="section-header" style="margin-bottom: 10px;">
+              <div class="section-title">Tier 2 Milestones (영구 유지)</div>
             </div>
-            <div v-if="tier2MilestoneState.next" class="exp-desc" style="margin-top: 10px; color: #ebcb8b;">
-              다음 마일스톤: {{ tier2MilestoneState.next.name }} (포인트 {{ tier2MilestoneState.next.at }})
+            <div class="stats-container">
+              <div v-for="ms in tier2MilestoneTable" :key="ms.id" class="stats-item" style="align-items: flex-start; flex-direction: column; gap: 4px;">
+                <span class="stats-label">{{ ms.name }} - 포인트 {{ ms.at }}</span>
+                <span class="exp-desc" style="color: #d8dee9;">{{ tier2MilestoneEffectText(ms.bonus) }}</span>
+                <span class="stats-value" :style="{ color: ms.unlocked ? '#a3be8c' : '#bf616a' }">
+                  {{ ms.unlocked ? '해금 완료' : `남은 포인트: ${ms.remaining}` }}
+                </span>
+              </div>
+              <div v-if="tier2MilestoneState.next" class="exp-desc" style="margin-top: 10px; color: #ebcb8b;">
+                다음 마일스톤: {{ tier2MilestoneState.next.name }} (포인트 {{ tier2MilestoneState.next.at }})
+              </div>
             </div>
           </div>
         </div>
@@ -397,6 +408,7 @@ const PRODUCT_2X_BOOST = 'fv_permanent_x2';
 const PRODUCT_2X_BOOST_ALT = 'fv-permanent-x2';
 
 const activeTab = ref('fx')
+const expSubTab = ref('rebirth')
 const integralSubTab = ref('rebirth')
 const canIntegrateNow = computed(() => canIntegrate())
 const tier2MilestoneState = computed(() => getTier2MilestoneState())
