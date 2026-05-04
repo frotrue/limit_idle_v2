@@ -8,7 +8,12 @@ made by frotrue
 
 <template>
   <div id="app" class="app-wrapper">
-    <div class="container">
+        <div class="container">
+      <!-- 워프 인디케이터 배너 -->
+      <div v-if="game.limit && game.limit.warp_active" class="warp-banner">
+        🚀 점근적 시간 워프 가동 중! (목표 FV: {{ format(game.limit.warp_target_fv) }}) - 현재 게임 배속: x{{ game.limit.current_warp_mult.toLocaleString() }} 🚀
+      </div>
+
 
       <!-- [상단 헤더] 현재 진행도 및 f(x) 수식 표시 -->
       <header class="header-card">
@@ -26,7 +31,7 @@ made by frotrue
       <!-- [네비게이션] 탭 메뉴 버튼 -->
       <nav class="tab-menu">
         <template v-for="tab in tabs" :key="tab.id">
-          <button v-if="['exp', 'integral'].includes(tab.id) ? (tab.id === 'exp' ? game.unlocked_exp : game.unlocked_integral) : true"
+          <button v-if="isTabVisible(tab.id)"
                   :class="{ active: activeTab === tab.id }"
                   @click="activeTab = tab.id">
             <span class="tab-icon">{{ tab.icon }}</span>
@@ -444,23 +449,121 @@ made by frotrue
 
           <!-- 6. Stats 탭 -->
           <div v-if="activeTab === 'stats'" class="tab-pane">
-            <div class="section-title">Statistics</div>
-            <div class="stats-container">
-              <div class="stats-item">
-                <span class="stats-label">Total FV Earned:</span>
-                <span class="stats-value">{{ format(game.stats.total_fv) }}</span>
+            <div class="dx-header-card" style="margin-bottom: 12px; background-color: #3b4252;">
+              <div class="label">STATISTICS & ACHIEVEMENTS</div>
+              <div class="dx-resource-display" style="font-size: 1.2rem;">총 플레이 타임: {{ Math.floor(game.stats.play_time / 3600) }}h {{ Math.floor((game.stats.play_time % 3600) / 60) }}m {{ Math.floor(game.stats.play_time % 60) }}s</div>
+            </div>
+
+            <nav class="tab-menu" style="margin-bottom: 12px;">
+              <button :class="{ active: statsSubTab === 'overview' }" @click="statsSubTab = 'overview'">
+                <span class="tab-label">Overview</span>
+              </button>
+              <button :class="{ active: statsSubTab === 'graph' }" @click="statsSubTab = 'graph'">
+                <span class="tab-label">Graph</span>
+              </button>
+              <button :class="{ active: statsSubTab === 'achievements' }" @click="statsSubTab = 'achievements'">
+                <span class="tab-label">Achievements</span>
+              </button>
+            </nav>
+
+            <div v-if="statsSubTab === 'overview'">
+              <div class="section-title">Overview</div>
+              <div class="stats-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="stats-item" style="flex-direction: column; align-items: flex-start; padding: 15px;">
+                  <span class="stats-label" style="font-size: 0.8rem; color: #88c0d0;">Total FV Earned</span>
+                  <span class="stats-value" style="font-size: 1.2rem;">{{ format(game.stats.total_fv) }}</span>
+                </div>
+                <div class="stats-item" style="flex-direction: column; align-items: flex-start; padding: 15px;">
+                  <span class="stats-label" style="font-size: 0.8rem; color: #88c0d0;">Current FV/sec</span>
+                  <span class="stats-value" style="font-size: 1.2rem;">{{ format(game.stats.fv_per_sec) }}</span>
+                </div>
+                <div class="stats-item" style="flex-direction: column; align-items: flex-start; padding: 15px;">
+                  <span class="stats-label" style="font-size: 0.8rem; color: #88c0d0;">Differentiation Count</span>
+                  <span class="stats-value" style="font-size: 1.2rem;">{{ format(game.differentiationCount) }}</span>
+                </div>
+                <div class="stats-item" style="flex-direction: column; align-items: flex-start; padding: 15px;">
+                  <span class="stats-label" style="font-size: 0.8rem; color: #88c0d0;">Total DX Earned</span>
+                  <span class="stats-value" style="font-size: 1.2rem;">{{ format(game.stats.total_dx) }}</span>
+                </div>
               </div>
-              <div class="stats-item">
-                <span class="stats-label">Current FV/sec:</span>
-                <span class="stats-value">{{ format(game.stats.fv_per_sec) }}</span>
+            </div>
+
+            <div v-if="statsSubTab === 'graph'">
+              <div class="section-title">Production History (FV/sec)</div>
+              <div class="exp-desc" style="margin-bottom: 12px;">최근 1분간의 초당 FV 생산량 변화(Log Scale)입니다.</div>
+              <LineChart :history="game.history.fv_per_sec" />
+            </div>
+
+            <div v-if="statsSubTab === 'achievements'">
+              <div class="section-title">Achievements</div>
+              <div class="exp-desc" style="margin-bottom: 12px; color: #a3be8c;">
+                현재 달성한 업적: {{ game.achievements.length }} / {{ ACHIEVEMENTS.length }}<br>
+                적용 중인 추가 배율: ×{{ format(getAchievementFvMultiplier(game.achievements)) }}<br>
+                시작 기본 FV 보너스: +{{ format(getAchievementStartFv(game.achievements)) }}<br>
+                미분 시 AP 보너스: +{{ format(getAchievementExtraAp(game.achievements)) }}
               </div>
-              <div class="stats-item">
-                <span class="stats-label">Differentiation Count:</span>
-                <span class="stats-value">{{ format(game.differentiationCount) }}</span>
+              <div class="upgrade-grid">
+                <div v-for="ach in ACHIEVEMENTS" :key="ach.id"
+                     class="upg-card-mini"
+                     :class="{
+                       'research-unlocked': game.achievements.includes(ach.id),
+                       'locked': !game.achievements.includes(ach.id)
+                     }"
+                     style="position: relative; opacity: 1;">
+                  <div class="upg-name" :style="{ color: game.achievements.includes(ach.id) ? '#a3be8c' : '#d8dee9' }">
+                    {{ game.achievements.includes(ach.id) ? '🏆' : '🔒' }} {{ ach.name }}
+                  </div>
+                  <div class="upg-desc" style="font-size: 0.75rem; color: #d8dee9; margin: 4px 0;">{{ ach.desc }}</div>
+                  <div class="upg-desc" style="font-size: 0.7rem; color: #ebcb8b;">보상: {{ ach.reward }}</div>
+                </div>
               </div>
-              <div class="stats-item">
-                <span class="stats-label">Total Play Time:</span>
-                <span class="stats-value">{{ Math.floor(game.stats.play_time / 3600) }}h {{ Math.floor((game.stats.play_time % 3600) / 60) }}m {{ Math.floor(game.stats.play_time % 60) }}s</span>
+            </div>
+          </div>
+
+          
+          <!-- [Limit 탭] -->
+          <div v-if="activeTab === 'limit'" class="tab-pane">
+            <div class="dx-header-card" style="margin-bottom: 12px; background-color: #bf616a; color: white;">
+              <div class="label">LIMIT: THE FINAL HORIZON</div>
+              <div class="dx-resource-display" style="font-size: 1.4rem;">보유 LP: {{ format(game.limit.lp) }}</div>
+              <div class="limit-passive-bonus" style="color: #eceff4; font-size: 1.1rem; margin-top: 8px;">
+                보유 LP 패시브 시너지: FV 생산량 ×{{ format(getLpPassiveBonus(game.limit.lp)) }}
+              </div>
+            </div>
+
+            <div v-if="canLimit(game.integral_count)" class="limit-reset-box" style="padding: 20px; background: #3b4252; border-radius: 8px; text-align: center; margin-bottom: 20px; border: 2px solid #d08770;">
+              <h3 style="color: #d08770; margin-top: 0;">x → ∞</h3>
+              <p style="color: #eceff4;">현재 상태로 극한에 도달할 수 있습니다.<br>
+              수행 시 업적과 연구 트리를 제외한 **모든 것이 초기화**됩니다.</p>
+              <p style="color: #a3be8c; font-size: 1.2rem; font-weight: bold;">예상 획득 LP: +{{ format(getLpGain(game.fv)) }}</p>
+              <button class="limit-reset-btn" @click="performLimitBtn">
+                🌌 극한으로 향하기 (Limit Reset) 🌌
+              </button>
+            </div>
+            <div v-else class="limit-reset-box" style="padding: 20px; background: #2e3440; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+              <p style="color: #4c566a;">극한에 도달하기 위해서는 적분 50회 이상이 필요합니다.<br>(현재 {{ game.integral_count }} / 50)</p>
+            </div>
+
+            <div class="section-title" style="color: #b48ead;">Transcendental Constants (초월 상수)</div>
+            <div class="upgrade-grid">
+              <div v-for="constant in LIMIT_CONSTANTS" :key="constant.id" class="upg-card">
+                <div class="upg-name">{{ constant.name }} <span style="color: #88c0d0;">(Lv.{{ game.limit.constants[constant.id] || 0 }})</span></div>
+                <div class="upg-desc">{{ constant.desc }}</div>
+                <div class="upg-effect" style="color: #ebcb8b; margin: 5px 0;">현재 효과: {{ constant.effectDesc(game.limit.constants[constant.id] || 0) }}</div>
+                <button class="limit-upgrade-btn" 
+                        :disabled="game.limit.lp.lt(constant.price(game.limit.constants[constant.id] || 0))"
+                        @click="buyLimitConstant(constant.id)">
+                  업그레이드 (비용: {{ format(constant.price(game.limit.constants[constant.id] || 0)) }} LP)
+                </button>
+              </div>
+            </div>
+            
+            <div class="section-title" style="margin-top: 20px; color: #bf616a;">L'Hôpital's Rule (로피탈의 정리 패시브)</div>
+            <div class="upg-card" style="width: 100%; border: 1px solid #bf616a;">
+              <div class="upg-name" style="color: #bf616a;">극한의 한계 돌파</div>
+              <div class="upg-desc">성장이 정체되었을 때, 미분과 적분 횟수를 사용하여 거대한 배율로 치환합니다. (상수 총합 5레벨 이상부터 1 이상의 효과 적용)</div>
+              <div class="upg-effect" style="color: #ebcb8b; font-size: 1.1rem;">
+                현재 적용 배율: ×{{ format(getLpHospitalMultiplier(game.differentiationCount, game.integral_count, (game.limit.constants.euler_e||0) + (game.limit.constants.pi||0) + (game.limit.constants.gamma||0))) }}
               </div>
             </div>
           </div>
@@ -493,6 +596,7 @@ made by frotrue
 import { ref, reactive, onMounted, computed } from 'vue'
 import Decimal from 'break_eternity.js'
 import CustomAlert from './components/CustomAlert.vue'
+import LineChart from './components/LineChart.vue'
 
 import {
   game, format, makefx, differentiate_bt,
@@ -503,17 +607,36 @@ import {
   getIntegralBonusValue, canIntegrate,
   getTier2MilestoneState, getTier2MilestoneTable,
   getTier3MilestoneState, getTier3MilestoneTable,
-  purchaseResearch, getResearchState, AP_RESEARCH_NODES,
-  setAlertCallbacks, manualTick, saveGame, loadGame, resetGame
+  purchaseResearch, getResearchState, AP_RESEARCH_NODES, ACHIEVEMENTS,
+  setAlertCallbacks, manualTick, saveGame, loadGame, resetGame, LIMIT_CONSTANTS, getLpHospitalMultiplier, getLpGain, getLpPassiveBonus, canLimit, purchaseLimitConstant, performLimitReset
 } from './gameLogic.js'
+
+import { getAchievementFvMultiplier, getAchievementExtraAp, getAchievementStartFv } from './achievements.js'
 
 const PRODUCT_2X_BOOST = 'fv_permanent_x2';
 const PRODUCT_2X_BOOST_ALT = 'fv-permanent-x2';
 
+
+const isTabVisible = (tabId) => {
+  if (tabId === 'exp') return game.unlocked_exp;
+  if (tabId === 'integral') return game.unlocked_integral;
+  if (tabId === 'limit') return game.integral_count >= 50 || (game.limit && game.limit.limit_count > 0);
+  return true;
+}
+
 const activeTab = ref('fx')
+const performLimitBtn = () => {
+  if (confirm("정말 극한(Limit)에 도달하시겠습니까? 업적과 AP 연구를 제외한 모든 것이 초기화됩니다!")) {
+    performLimitReset()
+    activeTab.value = 'fx'
+  }
+}
+const buyLimitConstant = (id) => purchaseLimitConstant(id)
+
 const autoSubTab = ref('automation')
 const expSubTab = ref('rebirth')
 const integralSubTab = ref('rebirth')
+const statsSubTab = ref('overview')
 const canIntegrateNow = computed(() => canIntegrate())
 const tier2MilestoneState = computed(() => getTier2MilestoneState())
 const tier2MilestoneTable = computed(() => getTier2MilestoneTable())
@@ -660,6 +783,7 @@ const tabs = [
   { id: 'auto', name: 'Automation', icon: '⚙️' },
   { id: 'exp', name: 'Exponential', icon: '📈' },
   { id: 'integral', name: 'Integral', icon: '∫' },
+  { id: 'limit', name: 'Limit', icon: '🛑' },
   { id: 'shop', name: 'Shop', icon: '🛒' },
   { id: 'stats', name: 'Stats', icon: '📊' },
   { id: 'settings', name: 'Settings', icon: '⚙️' }
@@ -884,5 +1008,49 @@ onMounted(() => {
 .full-row { grid-column: 1 / -1; }
 .upg-card-mini.research-unlocked { background: linear-gradient(145deg, #1a2e1a, #162016); border-color: #4a7c59; opacity: 1; cursor: default; }
 .upg-card-mini.research-unlocked .upg-name { color: #a3be8c; }
+
+.limit-reset-btn {
+  background: linear-gradient(135deg, #bf616a, #d08770);
+  color: white;
+  font-size: 1.3rem;
+  font-weight: bold;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(191, 97, 106, 0.4);
+  transition: all 0.2s ease;
+  animation: pulse-glow 2s infinite;
+}
+.limit-reset-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(191, 97, 106, 0.6);
+}
+.limit-upgrade-btn {
+  background: #3b4252;
+  color: #eceff4;
+  font-size: 1rem;
+  font-weight: bold;
+  padding: 10px 16px;
+  border: 1px solid #88c0d0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 10px;
+}
+.limit-upgrade-btn:not(:disabled):hover {
+  background: #88c0d0;
+  color: #2e3440;
+}
+.limit-upgrade-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #4c566a;
+}
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 0 0 rgba(191, 97, 106, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(191, 97, 106, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(191, 97, 106, 0); }
+}
 </style>
 

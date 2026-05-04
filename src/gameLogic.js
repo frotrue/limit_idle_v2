@@ -5,8 +5,10 @@ import { TIER3_MILESTONES, getTier3MilestoneBonuses, getTier3MilestoneProgress }
 import { TIER2_MILESTONES, getTier2MilestoneBonuses, getTier2MilestoneProgress } from './tier2/milestones.js';
 import { SUPERSCRIPT_MAP, format } from './utils.js';
 import { AP_RESEARCH_NODES, canPurchaseResearch, getResearchBonuses, isAutoResearched, hasAnyAutoResearch } from './apResearch.js';
+import { ACHIEVEMENTS, getAchievementFvMultiplier, getAchievementExtraAp, getAchievementStartFv } from './achievements.js';
+import { LIMIT_CONSTANTS, getLpHospitalMultiplier, getLpGain, getLpPassiveBonus, canLimit } from './tier4/limit.js';
 
-export { SUPERSCRIPT_MAP, format, AP_RESEARCH_NODES };
+export { SUPERSCRIPT_MAP, format, AP_RESEARCH_NODES, ACHIEVEMENTS, LIMIT_CONSTANTS, getLpHospitalMultiplier, getLpGain, getLpPassiveBonus, canLimit };
 
 const SAVE_VERSION = 3;
 const EXP_PRICE_BASE_MULT = 3;
@@ -92,8 +94,20 @@ export const game = reactive({
   },
   is_2x_boost_owned: false,
   ap_research: [],
+  achievements: [],
+  limit: {
+    
+    lp: new Decimal(0),
+    constants: { euler_e: 0, pi: 0, gamma: 0 },
+    limit_count: 0
+  },
+  history: {
+    fv_per_sec: []
+  },
   lastTick: Date.now()
 });
+
+let currentTick = 0;
 
 const getTier3StartBonuses = () => {
   const count = Math.max(0, Number(game.integral_count || 0));
@@ -128,7 +142,12 @@ const getTier2Bonuses = () => getTier2MilestoneBonuses(game.exp_milestone_points
 const hasAutoUpgradeUsesMaxBuy = () => !!getTier2Bonuses().autoUpgradeUsesMaxBuy;
 const START_LEVEL_CAP = 10;
 const AUTO_IDLE_BACKOFF_MAX_MS = 60000;
-const MAX_X_HARD_CAP = new Decimal(300);
+const BASE_MAX_X_HARD_CAP = new Decimal(300);
+const getMaxXHardCap = () => {
+  const piLevel = game.limit?.constants?.pi || 0;
+  const piEffect = LIMIT_CONSTANTS.find(c => c.id === 'pi').getEffect(piLevel);
+  return BASE_MAX_X_HARD_CAP.plus(piEffect);
+};
 const MAX_X_SOFTCAP_START = new Decimal(10);
 const MAX_X_SOFTCAP_POWER = 2.2;
 const MAX_X_MIN_GAIN = new Decimal(0.005);
@@ -146,11 +165,11 @@ let cachedIntegralEffectiveCSquare = new Decimal(1);
 
 const getMaxXUpgradeGain = (currentMaxX) => {
   const current = new Decimal(currentMaxX || 1);
-  if (current.gte(MAX_X_HARD_CAP)) return new Decimal(0);
+  if (current.gte(getMaxXHardCap())) return new Decimal(0);
   if (current.lte(MAX_X_SOFTCAP_START)) return new Decimal(1);
   const reduced = Decimal.pow(MAX_X_SOFTCAP_START.div(current), MAX_X_SOFTCAP_POWER);
   const clampedReduced = Decimal.max(MAX_X_MIN_GAIN, reduced);
-  return Decimal.min(clampedReduced, MAX_X_HARD_CAP.minus(current));
+  return Decimal.min(clampedReduced, getMaxXHardCap().minus(current));
 };
 
 const getPriceSpikeMultiplier = (level, every = 15) => {
@@ -203,10 +222,10 @@ const applyRunStartState = (tier2) => {
   const t3Bonus = getTier3StartBonuses();
   const t2Start = getTier2StartBonuses();
 
-  game.fv = new Decimal(10).plus(t3Bonus.startFv).plus(t2Start.startFv);
+  game.fv = new Decimal(10).plus(t3Bonus.startFv).plus(t2Start.startFv).plus(getAchievementStartFv(game.achievements));
   game.fx = [new Decimal(1), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)];
   game.current_x = new Decimal(0);
-  game.max_x = Decimal.min(MAX_X_HARD_CAP, new Decimal(1).plus(t3Bonus.startMaxX));
+  game.max_x = Decimal.min(getMaxXHardCap(), new Decimal(1).plus(t3Bonus.startMaxX));
   game.x_increase = Decimal.min(game.max_x, new Decimal(0.05).plus(t3Bonus.startXIncrease));
 
   Object.values(game.x_upgrades).forEach(upg => {
@@ -365,8 +384,10 @@ const performDifferentiation = () => {
   const tier2 = getTier2Bonuses();
   const researchBonuses = getResearchBonuses(game.ap_research);
   // AP 연구 DX 배율 적용
-  const gain = rawGain.times(researchBonuses.dxGainMultiplier);
-  const apGain = Decimal.max(1, gain.plus(1).log10().floor().times(tier2.apGainMultiplier).floor());
+  const gammaLevel = game.limit?.constants?.gamma || 0;
+  const gammaMult = LIMIT_CONSTANTS.find(c => c.id === 'gamma').getEffect(gammaLevel);
+  const gain = rawGain.times(researchBonuses.dxGainMultiplier).times(gammaMult);
+  const apGain = Decimal.max(1, gain.plus(1).log10().floor().times(tier2.apGainMultiplier).floor()).times(gammaMult).plus(getAchievementExtraAp(game.achievements));
   game.dx_points = game.dx_points.plus(gain);
   game.ap_points = game.ap_points.plus(apGain);
   game.dx_multiplier = game.dx_multiplier.plus(gain);
@@ -439,11 +460,11 @@ export const buyOtherUpgrade = (upg) => {
     upg.level++;
     if (upg.id === 0) {
       const gain = getMaxXUpgradeGain(game.max_x);
-      game.max_x = Decimal.min(MAX_X_HARD_CAP, game.max_x.plus(gain));
+      game.max_x = Decimal.min(getMaxXHardCap(), game.max_x.plus(gain));
       game.x_increase = game.x_increase.times(1.1);
       if (game.x_increase.gt(game.max_x)) game.x_increase = game.max_x;
       upg.price = Decimal.max(1, price.times(1.6).times(getPriceSpikeMultiplier(upg.level)).floor());
-      if (game.max_x.gte(MAX_X_HARD_CAP)) {
+      if (game.max_x.gte(getMaxXHardCap())) {
         upg.level = 'MAX';
         upg.price = new Decimal('1e9999');
       }
@@ -542,17 +563,15 @@ export const performTier2Reset = () => {
     game.auto_upgrades[3].interval = 15000;
   }
 
-  // 연구로 해금된 자동 업그레이드만 활성화 유지
+  // 연구로 해금되지 않은 자동화만 비활성화 처리 (기존의 유저 설정 active 상태는 유지)
   game.auto_upgrades.forEach(auto => {
-    if (isAutoResearched(auto.id, game.ap_research)) {
-      auto.active = true;
-    } else {
+    if (!isAutoResearched(auto.id, game.ap_research)) {
       auto.active = false;
     }
   });
 
   makefx();
-  saveGame()
+  saveGame();
 };
 
 export const performTier3Reset = () => {
@@ -631,7 +650,9 @@ const getPostExpBaseGain = () => {
   
   refreshIntegralCache();
   const cBonus = cachedIntegralEffectiveC.times(0.1);
-  const totalExp = (game.exp_multiplier || new Decimal(1)).plus(cBonus);
+  const eulerLevel = game.limit?.constants?.euler_e || 0;
+  const eulerBonus = LIMIT_CONSTANTS.find(c => c.id === 'euler_e').getEffect(eulerLevel);
+  const totalExp = (game.exp_multiplier || new Decimal(1)).plus(cBonus).plus(eulerBonus);
   
   let result = baseGain.pow(totalExp);
   
@@ -645,6 +666,19 @@ const getPostExpBaseGain = () => {
   const researchBonuses = getResearchBonuses(game.ap_research);
   if (researchBonuses.fvProductionMultiplier.gt(1)) {
     result = result.times(researchBonuses.fvProductionMultiplier);
+  }
+  
+  // 업적 보너스 적용
+  result = result.times(getAchievementFvMultiplier(game.achievements));
+  
+  const eLevel = game.limit?.constants?.euler_e || 0;
+  const pLevel = game.limit?.constants?.pi || 0;
+  const gLevel = game.limit?.constants?.gamma || 0;
+  const totalConstants = eLevel + pLevel + gLevel;
+  result = result.times(getLpHospitalMultiplier(game.differentiationCount, game.integral_count, totalConstants));
+  
+  if (game.limit?.lp && game.limit.lp.gt(0)) {
+    result = result.times(Decimal.pow(10, game.limit.lp));
   }
   
   return result;
@@ -781,11 +815,11 @@ const simulateMaxOtherUpgradePurchase = (upg, budget, tier2) => {
       if (upg.id === 0) {
         const gain = getMaxXUpgradeGain(simulatedMaxX);
         totalMaxXGain = totalMaxXGain.plus(gain);
-        simulatedMaxX = Decimal.min(MAX_X_HARD_CAP, simulatedMaxX.plus(gain));
+        simulatedMaxX = Decimal.min(getMaxXHardCap(), simulatedMaxX.plus(gain));
         nextXIncrease = nextXIncrease.times(1.1);
         if (nextXIncrease.gt(simulatedMaxX)) nextXIncrease = simulatedMaxX;
         price = Decimal.max(1, price.times(1.6).times(getPriceSpikeMultiplier(nextLevel)).floor());
-        if (simulatedMaxX.gte(MAX_X_HARD_CAP)) {
+        if (simulatedMaxX.gte(getMaxXHardCap())) {
           nextLevel = 'MAX';
           price = new Decimal('1e9999');
           hitsMax = true;
@@ -858,7 +892,7 @@ export const buyMaxOtherUpgrade = (upg) => {
 
   if (upg.type === 'fx') {
     if (upg.id === 0) {
-      game.max_x = Decimal.min(MAX_X_HARD_CAP, game.max_x.plus(result.totalMaxXGain || 0));
+      game.max_x = Decimal.min(getMaxXHardCap(), game.max_x.plus(result.totalMaxXGain || 0));
       game.x_increase = Decimal.min(game.max_x, result.nextXIncrease || game.x_increase);
     } else if (upg.id === 1) {
       if (upg.level === 'MAX') {
@@ -1036,7 +1070,6 @@ export const manualTick = () => {
     showAlertFn("지수 함수가 해금되었습니다! Exponential 탭을 확인하세요.", '알림');
   }
   
-  // 밸런스 조절: 1e5 -> 2
   if (!game.unlocked_integral && game.exp_multiplier.gte(INTEGRAL_UNLOCK_EXP_REQ)) {
     game.unlocked_integral = true;
     showAlertFn("적분 함수가 해금되었습니다! Integral 탭을 확인하세요.", '알림');
@@ -1045,6 +1078,23 @@ export const manualTick = () => {
   let gainPerCycle = getPostExpBaseGain();
   const cyclesPerTick = game.x_increase.div(game.max_x);
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
+
+  currentTick++;
+  
+  if (currentTick % 10 === 0) {
+    let logVal = game.stats.fv_per_sec.gt(0) ? game.stats.fv_per_sec.log10().toNumber() : 0;
+    game.history.fv_per_sec.push(logVal);
+    if (game.history.fv_per_sec.length > 60) {
+      game.history.fv_per_sec.shift();
+    }
+
+    ACHIEVEMENTS.forEach(ach => {
+      if (!game.achievements.includes(ach.id) && ach.check(game)) {
+        game.achievements.push(ach.id);
+        showAlertFn(`🏆 업적 달성: [${ach.name}]\n보상: ${ach.reward}`, '업적 달성!');
+      }
+    });
+  }
 
   let completedCycle = false;
   if (game.x_increase.gte(game.max_x)) {
@@ -1086,7 +1136,7 @@ export const loadGame = () => {
   game.save_version = loadedVersion;
   game.fv = new Decimal(data.fv || 10);
   game.current_x = new Decimal(data.current_x || 0);
-  game.max_x = Decimal.min(MAX_X_HARD_CAP, new Decimal(data.max_x || 1));
+  game.max_x = Decimal.min(getMaxXHardCap(), new Decimal(data.max_x || 1));
   game.x_increase = new Decimal(data.x_increase || 0.05);
   if (game.x_increase.gt(game.max_x)) game.x_increase = game.max_x;
   game.prestige_x = new Decimal(data.prestige_x || 1);
@@ -1142,6 +1192,28 @@ export const loadGame = () => {
   game.auto_integral.fv_threshold = savedAutoInt.fv_threshold || '1e50';
   game.auto_integral.cooldown_ms = Math.max(1000, Number(savedAutoInt.cooldown_ms || 10000));
   game.auto_integral.last_trigger_at = Number(savedAutoInt.last_trigger_at || 0);
+
+  // 업적 복원
+  if (Array.isArray(data.achievements)) {
+    game.achievements = data.achievements;
+  } else {
+    game.achievements = [];
+  }
+
+  if (data.limit) {
+    game.limit.lp = new Decimal(data.limit.lp || 0);
+    game.limit.constants = data.limit.constants || { euler_e: 0, pi: 0, gamma: 0 };
+    game.limit.limit_count = Number(data.limit.limit_count || 0);
+    } else {
+    game.achievements = [];
+  }
+
+  // 히스토리 복원
+  if (data.history && Array.isArray(data.history.fv_per_sec)) {
+    game.history.fv_per_sec = data.history.fv_per_sec;
+  } else {
+    game.history = { fv_per_sec: [] };
+  }
 
   if (loadedVersion < 2) {
     // Legacy saves had no version marker; milestone bonuses are derived from integral_count.
@@ -1361,3 +1433,51 @@ debug.tier3()           - 3티어 마일스톤/보너스 상태 출력
   };
   console.log("🛠️ 테스트용 디버그 명령어가 로드되었습니다. 콘솔에 debug.help() 를 입력해보세요.");
 }
+
+export const purchaseLimitConstant = (id) => {
+  const constant = LIMIT_CONSTANTS.find(c => c.id === id);
+  if (!constant) return false;
+  
+  const level = game.limit.constants[id] || 0;
+  const price = constant.price(level);
+  
+  if (game.limit.lp.gte(price)) {
+    game.limit.lp = game.limit.lp.minus(price);
+    game.limit.constants[id] = level + 1;
+    saveGame();
+    return true;
+  }
+  return false;
+};
+
+export const performLimitReset = () => {
+  if (!canLimit(game.integral_count)) return;
+  
+    const earnedLp = getLpGain(game.fv);
+  game.limit.lp = game.limit.lp.plus(earnedLp);
+  game.limit.limit_count++;
+  
+  // Hard reset Tier 1 ~ 3
+  game.fv = new Decimal(10);
+  game.dx_points = new Decimal(0);
+  game.ap_points = new Decimal(0);
+  game.dx_multiplier = new Decimal(0);
+  game.differentiationCount = new Decimal(0);
+  game.prestige_x = new Decimal(1);
+  
+  game.unlocked_exp = false;
+  game.exp_x = new Decimal(0);
+  game.exp_multiplier = new Decimal(1);
+  game.exp_milestone_points = 0;
+  Object.values(game.exp_upgrades).forEach(u => u.level = 0);
+  
+  game.unlocked_integral = false;
+  game.integral_c = new Decimal(0);
+  game.integral_count = 0;
+  
+  applyRunStartState(getTier2MilestoneBonuses(0));
+  
+  game.history.fv_per_sec = [];
+  
+  saveGame();
+};
