@@ -47,7 +47,7 @@ export const game = reactive({
   dx_multiplier: new Decimal(0),
   differentiationCount: new Decimal(0),
   auto_upgrades: [
-    { id: 0, name: 'Auto Function Upgrade', targetType: 'x_upgrades', interval: 10000, lastTick: 0, unlockedAt: 1, active: false },
+    { id: 0, name: 'Auto Function Upgrade', targetType: 'x_upgrades', interval: 2000, lastTick: 0, unlockedAt: 1, active: false },
     { id: 1, name: 'Auto FV Utility Upgrade', targetType: 'other_upgrades_fx', interval: 2000, lastTick: 0, unlockedAt: 3, active: false },
     { id: 2, name: 'Auto DX Utility Upgrade', targetType: 'other_upgrades_ddx', interval: 5000, lastTick: 0, unlockedAt: 5, active: false },
     { id: 3, name: 'Auto Differentiate', targetType: 'differentiate', interval: 15000, lastTick: 0, unlockedAt: 7, active: false },
@@ -536,7 +536,7 @@ export const performTier2Reset = () => {
       auto.interval = Math.max(100, Number(preservedIntervals[index] || auto.interval));
     });
   } else {
-    game.auto_upgrades[0].interval = 10000;
+    game.auto_upgrades[0].interval = 2000;
     game.auto_upgrades[1].interval = 2000;
     game.auto_upgrades[2].interval = 5000;
     game.auto_upgrades[3].interval = 15000;
