@@ -481,7 +481,7 @@ export const buyOtherUpgrade = (upg) => {
     spendCurrency(currency, price);
     upg.level++;
     if (upg.id === 2) {
-      game.prestige_x = game.prestige_x.plus(0.1);
+      game.prestige_x = game.prestige_x.plus(0.5);
       let mult = 1.5 + Math.floor(upg.level / 50) * 0.1;
       upg.price = Decimal.max(1, price.times(mult).times(getPriceSpikeMultiplier(upg.level)).floor());
     } else if (upg.id === 3) {
@@ -903,7 +903,7 @@ export const buyMaxOtherUpgrade = (upg) => {
     }
   } else if (upg.type === 'ddx') {
     if (upg.id === 2) {
-      game.prestige_x = game.prestige_x.plus(new Decimal(0.1).times(result.bought));
+      game.prestige_x = game.prestige_x.plus(new Decimal(0.5).times(result.bought));
     } else if (upg.id === 3 && result.intervals) {
       game.auto_upgrades.forEach((auto, index) => {
         auto.interval = result.intervals[index] || auto.interval;
