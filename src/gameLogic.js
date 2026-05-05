@@ -501,7 +501,7 @@ export const buyOtherUpgrade = (upg) => {
 
 export const buyExpUpgrade = (upg) => {
   if (game.dx_points.gte(upg.price)) {
-    showConfirmFn(`[경고: 초월 진화]\n강력한 지수 효과를 얻는 대신, 미분 재화(DX)를 포함한 게임의 모든 진행도가 초기화됩니다.\n\n정말 진행하시겠습니까?`, () => {
+    showConfirmFn(`[경고: 초월 진화]\n강력한 지수 효과를 얻는 대신, 미분 재화(DX)를 포함한 게임 진행도가 초기화됩니다.\n(단, 업적, 연구 트리, 모든 마일스톤 보상은 영구적으로 유지됩니다!)\n\n정말 진행하시겠습니까?`, () => {
       // Hard guard: stale confirm callbacks must not bypass current DX cost.
       if (!game.dx_points.gte(upg.price)) {
         showAlertFn("DX가 부족하여 초월 진화를 진행할 수 없습니다.", '알림');
@@ -598,7 +598,7 @@ export const integrate_bt = () => {
     let gain = logFv.pow(0.7).floor();
     if (gain.lt(1)) gain = new Decimal(1);
 
-    showConfirmFn(`[경고: 적분 (3차 환생)]\n현재까지의 모든 f(x), 미분(DX), 지수(Exp)를 잃는 대신,\n영구적인 지수 보너스를 제공하는 '적분 상수(C)' ${format(gain)} 를 얻습니다.\n(C 1당 기본 지수 +0.1)\n\n정말 진행하시겠습니까?`, () => {
+    showConfirmFn(`[경고: 적분 (3차 환생)]\n현재까지의 모든 f(x), 미분(DX), 지수(Exp) 재화를 잃는 대신,\n영구적인 지수 보너스를 제공하는 '적분 상수(C)' ${format(gain)} 를 얻습니다.\n(단, 업적, 연구 트리, 모든 마일스톤 보상은 영구적으로 유지됩니다!)\n\n정말 진행하시겠습니까?`, () => {
       game.integral_c = game.integral_c.plus(gain);
       game.integral_count += 1;
 
