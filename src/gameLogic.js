@@ -12,9 +12,9 @@ export { SUPERSCRIPT_MAP, format, AP_RESEARCH_NODES, ACHIEVEMENTS, LIMIT_CONSTAN
 
 const SAVE_VERSION = 3;
 const EXP_PRICE_BASE_MULT = 3;
-const EXP_PRICE_GROWTH = 12;
-const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
-const EXP_REBIRTH_BASE_GAIN = 0.05;
+const EXP_PRICE_GROWTH = 9;
+const MIN_EXP_REBIRTH_PRICE = new Decimal('1e8');
+const EXP_REBIRTH_BASE_GAIN = 0.1;
 const INTEGRAL_UNLOCK_EXP_REQ = 1.5;
 
 export const game = reactive({
