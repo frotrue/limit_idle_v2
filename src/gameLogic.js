@@ -40,8 +40,8 @@ export const game = reactive({
   other_upgrades: {
     0: { id: 0, name: 'Upgrade max x', price: new Decimal(1000), type: 'fx', level: 0 },
     1: { id: 1, name: 'Upgrade x increase', price: new Decimal(100), type: 'fx', level: 0 },
-    2: { id: 2, name: 'Increase x in f\'(x)', price: new Decimal(10), type:'ddx', currency: 'DX', level: 0 },
-    3: { id: 3, name: 'Optimize All Auto Intervals', price: new Decimal(5), type:'ddx', currency: 'AP', level: 0 }
+    2: { id: 2, name: 'Increase x in f\'(x)', price: new Decimal(10), type: 'ddx', currency: 'DX', level: 0 },
+    3: { id: 3, name: 'Optimize All Auto Intervals', price: new Decimal(5), type: 'ddx', currency: 'AP', level: 0 }
   },
   prestige_x: new Decimal(1),
   dx_points: new Decimal(0),
@@ -96,7 +96,7 @@ export const game = reactive({
   ap_research: [],
   achievements: [],
   limit: {
-    
+
     lp: new Decimal(0),
     constants: { euler_e: 0, pi: 0, gamma: 0 },
     limit_count: 0
@@ -313,7 +313,7 @@ export const differentiate = (equation, x) => differentiateEquation(equation, x)
 export const integrate_calc = (equation, x) => integrateEquationAt(equation, x);
 
 let showAlertFn = (msg, title) => console.log(title, msg);
-let showConfirmFn = (msg, onConfirm, title) => { if(confirm(msg)) onConfirm(); };
+let showConfirmFn = (msg, onConfirm, title) => { if (confirm(msg)) onConfirm(); };
 
 export const setAlertCallbacks = (alertCb, confirmCb) => {
   showAlertFn = alertCb;
@@ -402,7 +402,7 @@ const performDifferentiation = () => {
 
 export const differentiate_bt = () => {
   if (canDifferentiateNow()) {
-    showConfirmFn("미분 시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분 시 f'("+game.prestige_x+") = "+format(differentiate(game.fx,game.prestige_x))+" 만큼의 DX를 얻습니다", () => {
+    showConfirmFn("미분 시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분 시 f'(" + game.prestige_x + ") = " + format(differentiate(game.fx, game.prestige_x)) + " 만큼의 DX를 얻습니다", () => {
       const result = performDifferentiation();
       if (!result) {
         showAlertFn("미분하려면 최소 1.00e10 FV가 필요합니다.", '알림');
@@ -423,7 +423,7 @@ export const buyUpgrade = (upg) => {
     upg.level++;
     if (upg.type === 'add') {
       game.fx[upg.id] = game.fx[upg.id].plus(1);
-      
+
       // 함수 업그레이드 밸런스 패치
       // 초기 진행을 시원하게 하기 위해 초반(100레벨 이하)은 5레벨마다 1.5배, 10레벨마다 2배로 파격적 보너스
       if (upg.level % 10 === 0) {
@@ -431,10 +431,10 @@ export const buyUpgrade = (upg) => {
       } else if (upg.level % 5 === 0) {
         game.fx[upg.id] = game.fx[upg.id].times(1.5).floor();
       }
-      
+
       // 가격 스케일링: getXUpgradePriceMultiplierByLevel로 통합 관리
       let multiplier = getXUpgradePriceMultiplierByLevel(upg.level);
-      
+
       upg.price = Decimal.max(1, upg.price.times(multiplier).times(getPriceSpikeMultiplier(upg.level)).ceil());
 
       makefx();
@@ -446,7 +446,7 @@ export const buyOtherUpgrade = (upg) => {
   if (upg.level === 'MAX') return;
   let price = new Decimal(upg.price);
   const currency = getUpgradeCurrency(upg);
-  if (upg.type ==='fx' && game.fv.gte(price)){
+  if (upg.type === 'fx' && game.fv.gte(price)) {
     if (upg.id === 0) {
       const gainPreview = getMaxXUpgradeGain(game.max_x);
       if (gainPreview.lte(0)) {
@@ -477,7 +477,7 @@ export const buyOtherUpgrade = (upg) => {
         upg.price = new Decimal('1e9999');
       }
     }
-  } else if (upg.type ==='ddx' && getCurrencyAmount(currency).gte(price)) {
+  } else if (upg.type === 'ddx' && getCurrencyAmount(currency).gte(price)) {
     spendCurrency(currency, price);
     upg.level++;
     if (upg.id === 2) {
@@ -515,7 +515,7 @@ export const buyExpUpgrade = (upg) => {
       let expGain = EXP_REBIRTH_BASE_GAIN;
       expGain += tier2.extraExpX;
       game.exp_x = game.exp_x.plus(expGain);
-      
+
       upg.price = getExpUpgradePrice(upg);
       game.exp_multiplier = new Decimal(1).plus(game.exp_x);
 
@@ -576,16 +576,16 @@ export const performTier2Reset = () => {
 
 export const performTier3Reset = () => {
   performTier2Reset(); // 1, 2차 초기화 내용 포함
-  
+
   // 지수(Exp) 관련 추가 초기화
   game.exp_x = new Decimal(0);
   game.exp_multiplier = new Decimal(1);
-  
+
   Object.values(game.exp_upgrades).forEach(upg => {
     upg.level = 0;
     upg.price = getExpUpgradePrice(upg);
   });
-  
+
   saveGame();
 };
 
@@ -601,7 +601,7 @@ export const integrate_bt = () => {
     showConfirmFn(`[경고: 적분 (3차 환생)]\n현재까지의 모든 f(x), 미분(DX), 지수(Exp)를 잃는 대신,\n영구적인 지수 보너스를 제공하는 '적분 상수(C)' ${format(gain)} 를 얻습니다.\n(C 1당 기본 지수 +0.1)\n\n정말 진행하시겠습니까?`, () => {
       game.integral_c = game.integral_c.plus(gain);
       game.integral_count += 1;
-      
+
       performTier3Reset();
       showAlertFn(`적분 환생이 완료되었습니다!\n현재 C: ${format(game.integral_c)}, 적용 보너스: +${format(getIntegralBonusValue().times(0.1))}`, '적분 환생');
     }, "적분 환생 확인");
@@ -647,40 +647,40 @@ const getPostExpBaseGain = () => {
   if (baseGain.lt(1)) baseGain = new Decimal(1);
   if (game.dx_multiplier.gt(0)) baseGain = baseGain.plus(game.dx_multiplier);
   if (game.is_2x_boost_owned) baseGain = baseGain.times(2);
-  
+
   refreshIntegralCache();
   const cBonus = cachedIntegralEffectiveC.times(0.1);
   const eulerLevel = game.limit?.constants?.euler_e || 0;
   const eulerBonus = LIMIT_CONSTANTS.find(c => c.id === 'euler_e').getEffect(eulerLevel);
   const totalExp = (game.exp_multiplier || new Decimal(1)).plus(cBonus).plus(eulerBonus);
-  
+
   let result = baseGain.pow(totalExp);
-  
+
   // Tier 3 마일스톤의 FV 생산 배율 보너스 적용
   const tier3 = getTier3StartBonuses();
   if (tier3.fvProductionMultiplier && tier3.fvProductionMultiplier.gt(1)) {
     result = result.times(tier3.fvProductionMultiplier);
   }
-  
+
   // AP 연구 FV 생산 배율 보너스 적용
   const researchBonuses = getResearchBonuses(game.ap_research);
   if (researchBonuses.fvProductionMultiplier.gt(1)) {
     result = result.times(researchBonuses.fvProductionMultiplier);
   }
-  
+
   // 업적 보너스 적용
   result = result.times(getAchievementFvMultiplier(game.achievements));
-  
+
   const eLevel = game.limit?.constants?.euler_e || 0;
   const pLevel = game.limit?.constants?.pi || 0;
   const gLevel = game.limit?.constants?.gamma || 0;
   const totalConstants = eLevel + pLevel + gLevel;
   result = result.times(getLpHospitalMultiplier(game.differentiationCount, game.integral_count, totalConstants));
-  
+
   if (game.limit?.lp && game.limit.lp.gt(0)) {
     result = result.times(Decimal.pow(10, game.limit.lp));
   }
-  
+
   return result;
 };
 
@@ -738,7 +738,7 @@ const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
     let bulkCost;
     if (r > 1) {
       // 정확도를 위해 floor() 대신 누적값 계산 보정
-      bulkCost = price.times( Decimal.pow(r, affordable).minus(1) ).div( r - 1 ).ceil();
+      bulkCost = price.times(Decimal.pow(r, affordable).minus(1)).div(r - 1).ceil();
     } else {
       bulkCost = price.times(affordable).ceil();
     }
@@ -747,7 +747,7 @@ const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
       // 실수 연산 오차로 인한 fallback
       if (affordable > 1) {
         affordable -= 1;
-        bulkCost = price.times( Decimal.pow(r, affordable).minus(1) ).div( r - 1 ).ceil();
+        bulkCost = price.times(Decimal.pow(r, affordable).minus(1)).div(r - 1).ceil();
       } else {
         break;
       }
@@ -1069,7 +1069,7 @@ export const manualTick = () => {
     game.unlocked_exp = true;
     showAlertFn("지수 함수가 해금되었습니다! Exponential 탭을 확인하세요.", '알림');
   }
-  
+
   if (!game.unlocked_integral && game.exp_multiplier.gte(INTEGRAL_UNLOCK_EXP_REQ)) {
     game.unlocked_integral = true;
     showAlertFn("적분 함수가 해금되었습니다! Integral 탭을 확인하세요.", '알림');
@@ -1080,7 +1080,7 @@ export const manualTick = () => {
   game.stats.fv_per_sec = gainPerCycle.times(cyclesPerTick).times(10);
 
   currentTick++;
-  
+
   if (currentTick % 10 === 0) {
     let logVal = game.stats.fv_per_sec.gt(0) ? game.stats.fv_per_sec.log10().toNumber() : 0;
     game.history.fv_per_sec.push(logVal);
@@ -1144,13 +1144,13 @@ export const loadGame = () => {
   game.ap_points = new Decimal(data.ap_points || 0);
   game.dx_multiplier = new Decimal(data.dx_multiplier || 0);
   game.differentiationCount = new Decimal(data.differentiationCount || 0);
-  
+
   game.unlocked_exp = data.unlocked_exp || false;
   game.exp_x = new Decimal(data.exp_x || 0);
   // v3 마이그레이션: exp_multiplier를 exp_x로부터 재계산 (구 공식 e^x → 신 공식 1+x)
   game.exp_multiplier = new Decimal(1).plus(game.exp_x);
   game.exp_milestone_points = Math.max(0, Number(data.exp_milestone_points || 0));
-  
+
   game.unlocked_integral = data.unlocked_integral || false;
   game.integral_c = new Decimal(data.integral_c || 0);
   game.integral_count = Math.max(0, Number(data.integral_count || 0));
@@ -1204,7 +1204,7 @@ export const loadGame = () => {
     game.limit.lp = new Decimal(data.limit.lp || 0);
     game.limit.constants = data.limit.constants || { euler_e: 0, pi: 0, gamma: 0 };
     game.limit.limit_count = Number(data.limit.limit_count || 0);
-    } else {
+  } else {
     game.achievements = [];
   }
 
@@ -1271,7 +1271,7 @@ export const loadGame = () => {
   if (data.lastTick) {
     const now = Date.now();
     const offlineMs = now - data.lastTick;
-    
+
     // 5초 이상 오프라인이면 보상 시뮬레이션 실행 (초반 유저의 짧은 이탈도 보상)
     if (offlineMs > 5000) {
       // stepMs를 500ms 이하로 제한하여 자동 업그레이드가 실제 온라인과 유사한 빈도로 발동되도록 함
@@ -1437,10 +1437,10 @@ debug.tier3()           - 3티어 마일스톤/보너스 상태 출력
 export const purchaseLimitConstant = (id) => {
   const constant = LIMIT_CONSTANTS.find(c => c.id === id);
   if (!constant) return false;
-  
+
   const level = game.limit.constants[id] || 0;
   const price = constant.price(level);
-  
+
   if (game.limit.lp.gte(price)) {
     game.limit.lp = game.limit.lp.minus(price);
     game.limit.constants[id] = level + 1;
@@ -1451,12 +1451,12 @@ export const purchaseLimitConstant = (id) => {
 };
 
 export const performLimitReset = () => {
-  if (!canLimit(game.integral_count)) return;
-  
-    const earnedLp = getLpGain(game.fv);
+  if (!canLimit(game.integral_count, game.fv)) return;
+
+  const earnedLp = getLpGain(game.fv);
   game.limit.lp = game.limit.lp.plus(earnedLp);
   game.limit.limit_count++;
-  
+
   // Hard reset Tier 1 ~ 3
   game.fv = new Decimal(10);
   game.dx_points = new Decimal(0);
@@ -1464,20 +1464,21 @@ export const performLimitReset = () => {
   game.dx_multiplier = new Decimal(0);
   game.differentiationCount = new Decimal(0);
   game.prestige_x = new Decimal(1);
-  
-  game.unlocked_exp = false;
+
+  // game.unlocked_exp = false; // 마일스톤 유지에 따라 탭 잠금 해제 유지
   game.exp_x = new Decimal(0);
   game.exp_multiplier = new Decimal(1);
-  game.exp_milestone_points = 0;
+  // game.exp_milestone_points = 0; // 마일스톤 유지
   Object.values(game.exp_upgrades).forEach(u => u.level = 0);
-  
-  game.unlocked_integral = false;
+
+  // game.unlocked_integral = false; // 마일스톤 유지에 따라 탭 잠금 해제 유지
   game.integral_c = new Decimal(0);
-  game.integral_count = 0;
-  
-  applyRunStartState(getTier2MilestoneBonuses(0));
-  
+  // game.integral_count = 0; // 마일스톤 유지
+
+  // 마일스톤이 유지되므로 보너스도 유지된 상태로 시작
+  applyRunStartState(getTier2MilestoneBonuses(game.exp_milestone_points));
+
   game.history.fv_per_sec = [];
-  
+
   saveGame();
 };

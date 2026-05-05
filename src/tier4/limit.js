@@ -37,8 +37,9 @@ export const getLpHospitalMultiplier = (diffCount, intCount, totalConstantLevels
 export const getLpGain = (fv) => {
   const logVal = fv.gt(0) ? fv.log10().floor() : new Decimal(0);
   const baseLp = logVal.div(50).toNumber();
-  const scaledLp = Math.floor(Math.pow(Math.max(0, baseLp), 0.5));
-  return new Decimal(Math.max(1, scaledLp)); // 최소 1 제공
+  if (baseLp < 1) return new Decimal(0); // 최소 달성치 미달 시 0
+  const scaledLp = Math.floor(Math.pow(baseLp, 0.5));
+  return new Decimal(scaledLp);
 };
 
 export const getLpPassiveBonus = (lp) => {
@@ -46,6 +47,7 @@ export const getLpPassiveBonus = (lp) => {
   return Decimal.pow(10, lp);
 };
 
-export const canLimit = (integralCount) => {
-  return integralCount >= 50;
+export const canLimit = (integralCount, fv) => {
+  if (!fv) return integralCount >= 50; // 하위 호환
+  return integralCount >= 50 && getLpGain(fv).gt(0);
 };

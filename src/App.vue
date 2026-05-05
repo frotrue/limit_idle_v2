@@ -531,10 +531,10 @@ made by frotrue
               </div>
             </div>
 
-            <div v-if="canLimit(game.integral_count)" class="limit-reset-box" style="padding: 20px; background: #3b4252; border-radius: 8px; text-align: center; margin-bottom: 20px; border: 2px solid #d08770;">
+            <div v-if="canLimit(game.integral_count, game.fv)" class="limit-reset-box" style="padding: 20px; background: #3b4252; border-radius: 8px; text-align: center; margin-bottom: 20px; border: 2px solid #d08770;">
               <h3 style="color: #d08770; margin-top: 0;">x → ∞</h3>
               <p style="color: #eceff4;">현재 상태로 극한에 도달할 수 있습니다.<br>
-              수행 시 업적과 연구 트리를 제외한 **모든 것이 초기화**됩니다.</p>
+              수행 시 업적, 연구 트리, **그리고 모든 마일스톤(Tier 2 & 3)은 유지**되며 나머지 자원이 초기화됩니다.</p>
               <p style="color: #a3be8c; font-size: 1.2rem; font-weight: bold;">예상 획득 LP: +{{ format(getLpGain(game.fv)) }}</p>
               <button class="limit-reset-btn" @click="performLimitBtn">
                 🌌 극한으로 향하기 (Limit Reset) 🌌
