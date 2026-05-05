@@ -547,7 +547,7 @@ export const performTier2Reset = () => {
   }
 
   game.dx_points = new Decimal(0);
-  game.ap_points = new Decimal(0);
+  // game.ap_points = new Decimal(0); // AP 영구 유지
   game.dx_multiplier = new Decimal(0);
   game.differentiationCount = new Decimal(0);
   game.prestige_x = new Decimal(1);
@@ -1460,7 +1460,7 @@ export const performLimitReset = () => {
   // Hard reset Tier 1 ~ 3
   game.fv = new Decimal(10);
   game.dx_points = new Decimal(0);
-  game.ap_points = new Decimal(0);
+  // game.ap_points = new Decimal(0); // AP 영구 유지
   game.dx_multiplier = new Decimal(0);
   game.differentiationCount = new Decimal(0);
   game.prestige_x = new Decimal(1);
