@@ -12,9 +12,9 @@ export { SUPERSCRIPT_MAP, format, AP_RESEARCH_NODES, ACHIEVEMENTS, LIMIT_CONSTAN
 
 const SAVE_VERSION = 3;
 const EXP_PRICE_BASE_MULT = 3;
-const EXP_PRICE_GROWTH = 9;
-const MIN_EXP_REBIRTH_PRICE = new Decimal('1e8');
-const EXP_REBIRTH_BASE_GAIN = 0.1;
+const EXP_PRICE_GROWTH = 12;
+const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
+const EXP_REBIRTH_BASE_GAIN = 0.05;
 const INTEGRAL_UNLOCK_EXP_REQ = 1.5;
 
 export const game = reactive({
@@ -24,7 +24,7 @@ export const game = reactive({
   fx_str: "1",
   current_x: new Decimal(0),
   max_x: new Decimal(1),
-  x_increase: new Decimal(0.05),
+  x_increase: new Decimal(0.1),
   x_upgrades: {
     0: { id: 0, name: 'Upgrade x⁰', price: new Decimal(10), effect: 0.01, type: 'add', level: 0 },
     1: { id: 1, name: 'Upgrade x¹', price: new Decimal(100), effect: 0.05, type: 'add', level: 0 },
