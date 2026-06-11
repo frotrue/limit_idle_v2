@@ -12,7 +12,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      './gameLogic.js': fileURLToPath(new URL('./src/game/index.js', import.meta.url))
     },
   },
 })
