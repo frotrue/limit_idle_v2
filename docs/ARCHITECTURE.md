@@ -31,6 +31,7 @@ src/
       tier2Milestones.js
       tier3Milestones.js
     persistence/
+      saveSerializer.js
       stabilityPatches.js
 ```
 
@@ -58,9 +59,9 @@ Gameplay behavior grouped by responsibility:
 - `automation`: automatic purchases and automatic prestige actions.
 - `research`: AP research tree behavior.
 - `limitSystem`: Limit reset and LP/constant behavior.
-- `persistence`: save/load/reset alert callback facade.
+- `persistence`: save/load/reset alert callback facade. The `@/game` save path now uses explicit serialization instead of `JSON.stringify(game)`.
 
-At this stage, these files are facades over `gameLogic.js`. Future PRs should move implementation code into these modules one system at a time.
+At this stage, most of these files are still facades over `gameLogic.js`. Future PRs should move implementation code into these modules one system at a time.
 
 ### `game/data`
 
@@ -68,7 +69,12 @@ Stable import paths for static game data such as achievements, AP research nodes
 
 ### `game/persistence`
 
-Startup and runtime stability patches. This is where save migration and compatibility fixes should live until the full persistence system is extracted from `gameLogic.js`.
+Persistence helpers and compatibility fixes:
+
+- `saveSerializer.js`: explicit save object creation and localStorage writing.
+- `stabilityPatches.js`: startup/runtime save migration and compatibility patches.
+
+Legacy internal calls inside `gameLogic.js` still use the old save function until the UI and reset flows are migrated to `@/game` imports.
 
 ## Migration strategy
 
@@ -78,12 +84,12 @@ The safest migration order is:
 2. Add facades under `src/game/`.
 3. Update new code to import from `@/game` instead of `gameLogic.js`.
 4. Extract one pure subsystem at a time.
-5. Add Vitest coverage for each extracted subsystem before moving the next one.
+5. Add test coverage for each extracted subsystem before moving the next one.
 
 ## Suggested next PRs
 
-1. Extract save/load serialization helpers into `game/persistence/saveSerializer.js`.
+1. Migrate `App.vue` imports from `gameLogic.js` to `@/game` so UI actions use the optimized facades.
 2. Extract price formulas and softcap/hardcap helpers into `game/balance/formulas.js`.
-3. Add Vitest tests for `game/math/polynomial.js`.
-4. Add simulation scripts for 10 minutes, 1 hour, and 24 hours of idle progress.
-5. Migrate `App.vue` imports from `gameLogic.js` to `@/game`, then split tab panes into components.
+3. Move reset/save call sites inside `gameLogic.js` toward the persistence facade.
+4. Add save/load roundtrip tests once load migration is extracted.
+5. Split tab panes into components after import migration.
