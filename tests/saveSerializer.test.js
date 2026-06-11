@@ -7,6 +7,10 @@ import {
   saveSerializedGameState
 } from '../src/game/persistence/saveSerializer.js';
 
+const assertDecimalEq = (actual, expected) => {
+  assert.equal(new Decimal(actual).eq(expected), true, `${actual} should equal ${expected}`);
+};
+
 const createMemoryStorage = () => {
   const data = new Map();
   return {
@@ -92,17 +96,17 @@ const createMockGame = () => ({
   lastTick: 0
 });
 
-test('serializeGameState stores Decimal values as strings', () => {
+test('serializeGameState stores Decimal values as numeric strings', () => {
   const serialized = serializeGameState(createMockGame(), { now: 9999 });
 
-  assert.equal(serialized.fv, '10000000000');
+  assertDecimalEq(serialized.fv, '1e10');
   assert.deepEqual(serialized.fx, ['1', '2']);
-  assert.equal(serialized.dx_points, '100000');
-  assert.equal(serialized.stats.total_fv, '1000000000000');
-  assert.equal(serialized.limit.lp, '3');
-  assert.equal(serialized.x_upgrades[0].price, '100');
-  assert.equal(serialized.other_upgrades[1].price, '1e9999');
-  assert.equal(serialized.exp_upgrades[0].price, '1000000000000000');
+  assertDecimalEq(serialized.dx_points, '1e5');
+  assertDecimalEq(serialized.stats.total_fv, '1e12');
+  assertDecimalEq(serialized.limit.lp, '3');
+  assertDecimalEq(serialized.x_upgrades[0].price, '100');
+  assertDecimalEq(serialized.other_upgrades[1].price, '1e9999');
+  assertDecimalEq(serialized.exp_upgrades[0].price, '1e15');
 });
 
 test('serializeGameState keeps only bounded history', () => {
@@ -128,7 +132,7 @@ test('saveSerializedGameState writes the explicit save object', () => {
   assert.equal(result, true);
   const saved = JSON.parse(storage.getItem(SAVE_KEY));
   assert.equal(saved.lastTick, 12345);
-  assert.equal(saved.fv, '10000000000');
+  assertDecimalEq(saved.fv, '1e10');
   assert.equal(saved.ap_research[0], 'auto_function');
   assert.equal(saved.achievements[0], 'start_1k');
 });
