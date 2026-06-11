@@ -115,6 +115,12 @@ const simulateCappedGeometricUpgrade = ({ budget, price, level, capLevel, ratio,
   };
 };
 
+const getPrestigeXRatioBoundary = (nextTargetLevel) => {
+  const currentBand = Math.floor(nextTargetLevel / 50);
+  const nextChangeTarget = (currentBand + 1) * 50;
+  return nextChangeTarget - 1;
+};
+
 const simulatePrestigeXUpgrade = (upg, budget) => {
   let remaining = new Decimal(budget);
   let price = new Decimal(upg.price);
@@ -125,11 +131,9 @@ const simulatePrestigeXUpgrade = (upg, budget) => {
     const nextTargetLevel = level + 1;
     const currentRatio = 1.5 + Math.floor(nextTargetLevel / 50) * 0.1;
     const distToSpike = 15 - (level % 15);
-    const nextSegmentLevel = nextTargetLevel <= 50
-      ? 50
-      : Math.ceil(nextTargetLevel / 50) * 50;
-    const distToSegment = Math.max(1, nextSegmentLevel - level);
-    const maxBulk = Math.min(distToSpike, distToSegment);
+    const ratioBoundaryLevel = getPrestigeXRatioBoundary(nextTargetLevel);
+    const distToRatioBoundary = Math.max(1, ratioBoundaryLevel - level);
+    const maxBulk = Math.min(distToSpike, distToRatioBoundary);
     const nextLevelSpike = getPriceSpikeMultiplier(nextTargetLevel).gt(1);
     const affordable = nextLevelSpike
       ? 1
