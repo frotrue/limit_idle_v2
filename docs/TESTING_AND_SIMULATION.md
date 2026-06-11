@@ -21,6 +21,9 @@ Current coverage:
 - `tests/facades.test.js`
   - legacy `src/calc.js` compatibility facade
   - public `src/game/index.js` API smoke checks
+- `tests/stabilityPatches.test.js`
+  - legacy save patch behavior
+  - default Limit data migration without clearing achievements/research
 
 ## Simulation runner
 
@@ -33,13 +36,33 @@ npm run sim:1h
 npm run sim:24h
 ```
 
-You can also pass explicit options:
+The runner now prints CLI progress while it runs. In an interactive terminal it rewrites a single progress line with:
+
+- simulated progress percentage
+- simulated time / total simulated time
+- real elapsed time
+- estimated remaining real time
+- FV, DX, Exp points, and Integral count
+
+`sim:24h` uses long-run defaults so it does not run the expensive purchase strategy every simulated second.
+
+## Useful options
 
 ```bash
 node scripts/simulate.js --minutes=30 --strategy=balanced
 node scripts/simulate.js --hours=2 --strategy=active
 node scripts/simulate.js --seconds=120 --strategy=passive
+node scripts/simulate.js --hours=24 --long-run --purchase-every=600
 ```
+
+Options:
+
+- `--progress=false` or `--no-progress`: disable progress output.
+- `--progress-every-ms=500`: throttle progress redraws.
+- `--purchase-every=600`: run the purchase strategy every N ticks.
+- `--event-limit=200`: keep at most N alerts/milestones in memory.
+- `--max-real-seconds=120`: abort and print a partial report if real runtime exceeds N seconds.
+- `--long-run`: enables long-run defaults, including less frequent purchasing when no explicit purchase interval is provided.
 
 ## Strategies
 
@@ -82,3 +105,4 @@ npm run sim:24h
 3. Add separate strategies for active clicker, idle-only, automation-heavy, and late-game runs.
 4. Add save/load roundtrip tests once persistence is extracted from `gameLogic.js`.
 5. Add max-buy equivalence tests comparing repeated single buys against buy-max results.
+6. Add event-based long-run simulation for 7-day and 30-day balance checks.

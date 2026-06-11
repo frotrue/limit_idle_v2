@@ -12,7 +12,7 @@
     "sim": "node scripts/simulate.js",
     "sim:10m": "node scripts/simulate.js --minutes=10",
     "sim:1h": "node scripts/simulate.js --hours=1",
-    "sim:24h": "node scripts/simulate.js --hours=24"
+    "sim:24h": "node scripts/simulate.js --hours=24 --long-run --purchase-every=600 --event-limit=200 --max-real-seconds=120"
   },
   "dependencies": {
     "break_eternity.js": "^2.1.3",
