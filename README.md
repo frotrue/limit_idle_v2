@@ -22,6 +22,10 @@ npm run preview
 npm start
 ```
 
+## Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current module boundaries and Phase 2 refactoring roadmap.
+
 ## Used technologies
 
 - Vue
