@@ -54,6 +54,7 @@ export const installDecimalPowCache = ({ maxEntries = 4096, enabled = true } = {
   const originalStaticPow = Decimal.pow.bind(Decimal);
   const originalPrototypePow = Decimal.prototype.pow;
   const cache = createLruCache(maxEntries);
+  let computeDepth = 0;
   const stats = {
     installed: true,
     maxEntries,
@@ -74,6 +75,11 @@ export const installDecimalPowCache = ({ maxEntries = 4096, enabled = true } = {
   };
 
   const getOrCompute = (base, exponent, compute) => {
+    // Some break_eternity.js static pow paths call Decimal.prototype.pow internally.
+    // During that nested call, bypass this wrapper so one user-level pow call is not
+    // recorded as two misses or cached under two equivalent keys.
+    if (computeDepth > 0) return compute();
+
     let key;
     try {
       key = makeKey(base, exponent);
@@ -87,10 +93,15 @@ export const installDecimalPowCache = ({ maxEntries = 4096, enabled = true } = {
       return compute();
     }
 
-    const result = compute();
-    stats.misses += 1;
-    if (cache.set(key, result)) stats.evictions += 1;
-    return result;
+    computeDepth += 1;
+    try {
+      const result = compute();
+      stats.misses += 1;
+      if (cache.set(key, result)) stats.evictions += 1;
+      return result;
+    } finally {
+      computeDepth -= 1;
+    }
   };
 
   try {
