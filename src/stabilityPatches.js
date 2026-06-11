@@ -33,8 +33,10 @@ const getExpUpgradePrice = (upg) => {
 };
 
 const normalizeLimitShape = (limit = {}) => ({
+  ...limit,
   lp: limit.lp ?? DEFAULT_LIMIT.lp,
   constants: {
+    ...(limit.constants || {}),
     euler_e: Number(limit.constants?.euler_e || 0),
     pi: Number(limit.constants?.pi || 0),
     gamma: Number(limit.constants?.gamma || 0)
