@@ -24,6 +24,10 @@ Current coverage:
 - `tests/stabilityPatches.test.js`
   - legacy save patch behavior
   - default Limit data migration without clearing achievements/research
+- `tests/decimalPowCache.test.js`
+  - Decimal pow cache installation
+  - static `Decimal.pow` caching
+  - instance `.pow()` caching
 
 ## Simulation runner
 
@@ -46,6 +50,8 @@ The runner now prints CLI progress while it runs. In an interactive terminal it 
 
 `sim:24h` uses long-run defaults so it does not run the expensive purchase strategy every simulated second.
 
+The simulator also installs the Decimal pow cache by default and prints cache hit/miss statistics in the final report.
+
 ## Useful options
 
 ```bash
@@ -53,6 +59,7 @@ node scripts/simulate.js --minutes=30 --strategy=balanced
 node scripts/simulate.js --hours=2 --strategy=active
 node scripts/simulate.js --seconds=120 --strategy=passive
 node scripts/simulate.js --hours=24 --long-run --purchase-every=600
+node scripts/simulate.js --hours=1 --no-pow-cache
 ```
 
 Options:
@@ -63,6 +70,8 @@ Options:
 - `--event-limit=200`: keep at most N alerts/milestones in memory.
 - `--max-real-seconds=120`: abort and print a partial report if real runtime exceeds N seconds.
 - `--long-run`: enables long-run defaults, including less frequent purchasing when no explicit purchase interval is provided.
+- `--pow-cache=false` or `--no-pow-cache`: disable Decimal pow caching for A/B comparison.
+- `--pow-cache-size=4096`: set Decimal pow cache entry capacity.
 
 ## Strategies
 
