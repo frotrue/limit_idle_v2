@@ -14,6 +14,18 @@ const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
 const EXP_PRICE_SPIKE_EVERY = 5;
 const PRICE_SPIKE_FACTOR = 10;
 
+const getStorage = () => {
+  if (typeof globalThis !== 'undefined' && globalThis.localStorage) return globalThis.localStorage;
+  if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  return null;
+};
+
+const getTimerHost = () => {
+  if (typeof window !== 'undefined') return window;
+  if (typeof globalThis !== 'undefined' && globalThis.setInterval && globalThis.clearInterval) return globalThis;
+  return null;
+};
+
 const getPriceSpikeMultiplier = (level, every = 15) => {
   const lv = Number(level || 0);
   if (lv <= 0 || lv % every !== 0) return new Decimal(1);
@@ -63,9 +75,10 @@ const normalizeSerializedExpPrice = (data) => {
 };
 
 export const applyPreLoadSavePatches = () => {
-  if (typeof window === 'undefined' || !window.localStorage) return;
+  const storage = getStorage();
+  if (!storage) return;
 
-  const raw = window.localStorage.getItem(SAVE_KEY);
+  const raw = storage.getItem(SAVE_KEY);
   if (!raw) return;
 
   try {
@@ -86,7 +99,7 @@ export const applyPreLoadSavePatches = () => {
     if (normalizeSerializedExpPrice(data)) changed = true;
 
     if (changed) {
-      window.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      storage.setItem(SAVE_KEY, JSON.stringify(data));
     }
   } catch (err) {
     console.warn('[Limit Idle] Failed to apply save stability patches:', err);
@@ -133,11 +146,12 @@ const applyIapProductionLogPatch = () => {
 };
 
 export const applyRuntimeStabilityPatches = () => {
-  if (typeof window === 'undefined') return;
+  const timerHost = getTimerHost();
+  if (!timerHost) return;
 
   applyIapProductionLogPatch();
 
-  window.setInterval(() => {
+  timerHost.setInterval(() => {
     if (normalizeRuntimeExpPrice()) {
       saveGame();
     }
