@@ -6,6 +6,10 @@ import {
   getDecimalPowCacheStats
 } from '../src/game/performance/decimalPowCache.js';
 
+const assertDecimalEq = (actual, expected) => {
+  assert.equal(new Decimal(actual).eq(expected), true, `${actual} should equal ${expected}`);
+};
+
 test('installDecimalPowCache patches static Decimal.pow with cache stats', () => {
   const stats = installDecimalPowCache({ maxEntries: 16 });
   stats.clear();
@@ -13,8 +17,8 @@ test('installDecimalPowCache patches static Decimal.pow with cache stats', () =>
   const first = Decimal.pow(2, 10);
   const second = Decimal.pow(2, 10);
 
-  assert.equal(first.toString(), '1024');
-  assert.equal(second.toString(), '1024');
+  assertDecimalEq(first, 1024);
+  assertDecimalEq(second, 1024);
   assert.equal(stats.misses, 1);
   assert.equal(stats.hits, 1);
   assert.equal(getDecimalPowCacheStats(), stats);
@@ -28,8 +32,8 @@ test('installDecimalPowCache patches Decimal.prototype.pow with cache stats', ()
   const first = base.pow(4);
   const second = base.pow(4);
 
-  assert.equal(first.toString(), '81');
-  assert.equal(second.toString(), '81');
+  assertDecimalEq(first, 81);
+  assertDecimalEq(second, 81);
   assert.equal(stats.misses, 1);
   assert.equal(stats.hits, 1);
 });
