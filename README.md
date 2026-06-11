@@ -22,6 +22,22 @@ npm run preview
 npm start
 ```
 
+## Quality checks
+
+Run unit and facade smoke tests:
+
+```bash
+npm test
+```
+
+Run a quick balance simulation:
+
+```bash
+npm run sim:10m
+```
+
+See [docs/TESTING_AND_SIMULATION.md](docs/TESTING_AND_SIMULATION.md) for the full testing and simulation guide.
+
 ## Architecture
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current module boundaries and Phase 2 refactoring roadmap.
