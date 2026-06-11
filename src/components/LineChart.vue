@@ -60,11 +60,11 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateSize);
 });
 
-// 값 매핑 로직 (로그 스케일)
+// 값 매핑 로직 (history에는 이미 log10 값이 저장됨)
 const minLog = computed(() => {
   if (props.history.length === 0) return 0;
   const minVal = Math.min(...props.history);
-  return minVal <= 0 ? 0 : minVal; // history contains log10 values already
+  return minVal <= 0 ? 0 : minVal;
 });
 
 const maxLog = computed(() => {
@@ -102,8 +102,17 @@ const getLogValue = (i) => {
 };
 
 const formatLabel = (logVal) => {
-  if (logVal < 1) return 'e^0';
-  return `e^${logVal.toFixed(1)}`;
+  if (!Number.isFinite(logVal) || logVal <= 0) return '1';
+
+  const exponent = Math.floor(logVal);
+  if (exponent < 3) {
+    const value = Math.pow(10, logVal);
+    return value >= 100 ? Math.round(value).toLocaleString() : value.toFixed(1);
+  }
+
+  const mantissa = Math.pow(10, logVal - exponent);
+  if (Math.abs(mantissa - 1) < 0.05) return `1e${exponent}`;
+  return `${mantissa.toFixed(1)}e${exponent}`;
 };
 
 const linePath = computed(() => {
