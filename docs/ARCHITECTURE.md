@@ -74,7 +74,13 @@ Persistence helpers and compatibility fixes:
 - `saveSerializer.js`: explicit save object creation and localStorage writing.
 - `stabilityPatches.js`: startup/runtime save migration and compatibility patches.
 
-Legacy internal calls inside `gameLogic.js` still use the old save function until the UI and reset flows are migrated to `@/game` imports.
+Legacy internal calls inside `gameLogic.js` still use the old save function until the remaining reset/save call sites are extracted.
+
+## UI routing status
+
+`App.vue` still contains a legacy `./gameLogic.js` import in source. For now, Vite routes that UI import to `src/game/index.js` through `vite.config.js`. This lets the running app use optimized `src/game` facades without rewriting the large `App.vue` file in one risky change.
+
+The next cleanup should replace the source import directly and then split tab panes into smaller components.
 
 ## Migration strategy
 
@@ -82,13 +88,13 @@ The safest migration order is:
 
 1. Keep `gameLogic.js` as the source of truth.
 2. Add facades under `src/game/`.
-3. Update new code to import from `@/game` instead of `gameLogic.js`.
+3. Route or migrate UI imports to `src/game/index.js`.
 4. Extract one pure subsystem at a time.
 5. Add test coverage for each extracted subsystem before moving the next one.
 
 ## Suggested next PRs
 
-1. Migrate `App.vue` imports from `gameLogic.js` to `@/game` so UI actions use the optimized facades.
+1. Replace the remaining `App.vue` source import with direct `src/game/index.js` imports when the file is split or edited safely.
 2. Extract price formulas and softcap/hardcap helpers into `game/balance/formulas.js`.
 3. Move reset/save call sites inside `gameLogic.js` toward the persistence facade.
 4. Add save/load roundtrip tests once load migration is extracted.
