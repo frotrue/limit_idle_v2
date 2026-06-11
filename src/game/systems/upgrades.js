@@ -13,6 +13,7 @@ const MAX_X_SOFTCAP_START = new Decimal(10);
 const MAX_X_SOFTCAP_POWER = 2.2;
 const MAX_X_MIN_GAIN = new Decimal(0.005);
 const MAX_OTHER_ITERATIONS = 2000;
+const MAX_PRICE = new Decimal('1e9999');
 
 const getPriceSpikeMultiplier = (level, every = 15) => {
   const lv = Number(level || 0);
@@ -104,11 +105,13 @@ const simulateCappedGeometricUpgrade = ({ budget, price, level, capLevel, ratio,
       .floor();
   }
 
+  const isMaxed = nextLevel >= capLevel;
+
   return {
     bought,
     spent: budget.minus(remaining),
-    nextPrice,
-    nextLevel: nextLevel >= capLevel ? 'MAX' : nextLevel
+    nextPrice: isMaxed ? MAX_PRICE : nextPrice,
+    nextLevel: isMaxed ? 'MAX' : nextLevel
   };
 };
 
@@ -173,7 +176,7 @@ const simulateMaxXUpgrade = (upg, budget) => {
       return {
         bought,
         spent: budget.minus(remaining),
-        nextPrice: new Decimal('1e9999'),
+        nextPrice: MAX_PRICE,
         nextLevel: 'MAX',
         totalMaxXGain,
         nextXIncrease,
@@ -194,7 +197,7 @@ const simulateMaxXUpgrade = (upg, budget) => {
       return {
         bought,
         spent: budget.minus(remaining),
-        nextPrice: new Decimal('1e9999'),
+        nextPrice: MAX_PRICE,
         nextLevel: 'MAX',
         totalMaxXGain,
         nextXIncrease,
@@ -229,11 +232,13 @@ const simulateAutoIntervalUpgrade = (upg, budget) => {
     price = Decimal.max(1, price.times(2).times(getPriceSpikeMultiplier(nextLevel)).floor());
   }
 
+  const isMaxed = !intervals.some((v) => v > 100);
+
   return {
     bought,
     spent: budget.minus(remaining),
-    nextPrice: intervals.some((v) => v > 100) ? price : new Decimal('1e9999'),
-    nextLevel: intervals.some((v) => v > 100) ? nextLevel : 'MAX',
+    nextPrice: isMaxed ? MAX_PRICE : price,
+    nextLevel: isMaxed ? 'MAX' : nextLevel,
     intervals
   };
 };
