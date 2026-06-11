@@ -22,7 +22,9 @@ const parseDuration = (argv) => {
     progressEveryMs: 250,
     eventLimit: DEFAULT_EVENT_LIMIT,
     maxRealSeconds: 0,
-    longRun: false
+    longRun: false,
+    powCache: true,
+    powCacheSize: 4096
   };
 
   argv.forEach((arg) => {
@@ -42,6 +44,9 @@ const parseDuration = (argv) => {
     if (key === 'event-limit') options.eventLimit = Math.max(0, Number(value || DEFAULT_EVENT_LIMIT));
     if (key === 'max-real-seconds') options.maxRealSeconds = Math.max(0, Number(value || 0));
     if (key === 'long-run') options.longRun = parseBooleanFlag(value, true);
+    if (key === 'pow-cache') options.powCache = parseBooleanFlag(value, true);
+    if (key === 'no-pow-cache') options.powCache = false;
+    if (key === 'pow-cache-size') options.powCacheSize = Math.max(128, Number(value || options.powCacheSize));
   });
 
   let totalSeconds = Number(options.minutes || 0) * 60;
@@ -146,6 +151,9 @@ const main = async () => {
   globalThis.localStorage = createMemoryStorage();
   globalThis.location = { reload: () => {} };
   globalThis.confirm = () => true;
+
+  const { installDecimalPowCache, getDecimalPowCacheStats } = await import('../src/game/performance/decimalPowCache.js');
+  installDecimalPowCache({ enabled: options.powCache, maxEntries: options.powCacheSize });
 
   const {
     game,
@@ -303,6 +311,8 @@ const main = async () => {
 
   const totalSeconds = options.totalMs / 1000;
   const completedSeconds = simulatedNow / 1000;
+  const powCacheStats = getDecimalPowCacheStats();
+
   console.log('Limit Idle Simulation Report');
   console.log('============================');
   console.log(`Duration: ${formatDuration(completedSeconds)} / ${formatDuration(totalSeconds)}${aborted ? ' (aborted)' : ''}`);
@@ -311,6 +321,13 @@ const main = async () => {
   console.log(`Purchase interval: every ${options.purchaseEveryTicks} ticks (${formatDuration(options.purchaseEveryTicks * options.tickMs / 1000)})`);
   console.log(`Purchase strategy runs: ${purchaseRuns}`);
   console.log(`Event limit: ${options.eventLimit}`);
+  if (powCacheStats?.installed) {
+    const totalPowCalls = powCacheStats.hits + powCacheStats.misses;
+    const hitRate = totalPowCalls > 0 ? (powCacheStats.hits / totalPowCalls * 100).toFixed(1) : '0.0';
+    console.log(`Pow cache: ${powCacheStats.hits} hits / ${powCacheStats.misses} misses (${hitRate}% hit rate, size ${powCacheStats.size}/${powCacheStats.maxEntries})`);
+  } else {
+    console.log('Pow cache: disabled');
+  }
   console.log('');
   console.log('Final state');
   console.log(`- FV: ${format(game.fv)}`);
