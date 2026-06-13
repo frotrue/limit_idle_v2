@@ -593,7 +593,7 @@ made by frotrue
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import Decimal from 'break_eternity.js'
 import CustomAlert from './components/CustomAlert.vue'
 import LineChart from './components/LineChart.vue'
@@ -609,7 +609,7 @@ import {
   getTier3MilestoneState, getTier3MilestoneTable,
   purchaseResearch, getResearchState, AP_RESEARCH_NODES, ACHIEVEMENTS,
   setAlertCallbacks, manualTick, saveGame, loadGame, resetGame, LIMIT_CONSTANTS, getLpHospitalMultiplier, getLpGain, getLpPassiveBonus, canLimit, purchaseLimitConstant, performLimitReset
-} from './gameLogic.js'
+} from '@/game'
 
 import { getAchievementFvMultiplier, getAchievementExtraAp, getAchievementStartFv } from './achievements.js'
 
@@ -919,7 +919,8 @@ onMounted(() => {
 
   if (window.cordova || window.Capacitor) {
     if (window.cordova) {
-      document.addEventListener('deviceready', startStore, false);
+      storeDeviceReadyHandler = startStore;
+      document.addEventListener('deviceready', storeDeviceReadyHandler, false);
     } else {
       // Capacitor 환경에서는 바로 실행 (또는 플러그인 로드 후)
       startStore();
@@ -928,8 +929,27 @@ onMounted(() => {
     console.log("Not in a Cordova/Capacitor environment.");
   }
 
-  setInterval(manualTick, 100);
-  setInterval(saveGame, 30000);
+  manualTickTimer = window.setInterval(manualTick, 100);
+  saveTimer = window.setInterval(saveGame, 30000);
+})
+
+let manualTickTimer = null
+let saveTimer = null
+let storeDeviceReadyHandler = null
+
+onUnmounted(() => {
+  if (manualTickTimer !== null) {
+    window.clearInterval(manualTickTimer)
+    manualTickTimer = null
+  }
+  if (saveTimer !== null) {
+    window.clearInterval(saveTimer)
+    saveTimer = null
+  }
+  if (storeDeviceReadyHandler) {
+    document.removeEventListener('deviceready', storeDeviceReadyHandler, false)
+    storeDeviceReadyHandler = null
+  }
 })
 </script>
 

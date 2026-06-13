@@ -7,10 +7,12 @@ import { SUPERSCRIPT_MAP, format } from './utils.js';
 import { AP_RESEARCH_NODES, canPurchaseResearch, getResearchBonuses, isAutoResearched, hasAnyAutoResearch } from './apResearch.js';
 import { ACHIEVEMENTS, getAchievementFvMultiplier, getAchievementExtraAp, getAchievementStartFv } from './achievements.js';
 import { LIMIT_CONSTANTS, getLpHospitalMultiplier, getLpGain, getLpPassiveBonus, canLimit } from './tier4/limit.js';
+import { SAVE_KEY, saveSerializedGameState } from './game/persistence/saveSerializer.js';
 
 export { SUPERSCRIPT_MAP, format, AP_RESEARCH_NODES, ACHIEVEMENTS, LIMIT_CONSTANTS, getLpHospitalMultiplier, getLpGain, getLpPassiveBonus, canLimit };
 
 const SAVE_VERSION = 3;
+const CORRUPT_SAVE_KEY = `${SAVE_KEY}_corrupt`;
 const EXP_PRICE_BASE_MULT = 3;
 const EXP_PRICE_GROWTH = 12;
 const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
@@ -1125,13 +1127,32 @@ export const manualTick = () => {
 export const saveGame = () => {
   game.save_version = SAVE_VERSION;
   game.lastTick = Date.now();
-  localStorage.setItem('math_idle_save', JSON.stringify(game));
+  return saveSerializedGameState(game, globalThis.localStorage, { now: game.lastTick });
 };
 
 export const loadGame = () => {
-  const saved = localStorage.getItem('math_idle_save');
-  if (!saved) return;
-  const data = JSON.parse(saved);
+  const storage = globalThis.localStorage;
+  const saved = storage?.getItem(SAVE_KEY);
+  if (!saved) return false;
+
+  let data;
+  try {
+    data = JSON.parse(saved);
+  } catch (err) {
+    console.warn('[Limit Idle] Corrupt save ignored:', err);
+    try {
+      storage.setItem(CORRUPT_SAVE_KEY, saved);
+    } catch (_backupErr) {
+      // Best-effort backup only; removing the bad active save is the priority.
+    }
+    try {
+      storage.removeItem(SAVE_KEY);
+    } catch (_removeErr) {
+      // If storage is unavailable, still avoid crashing this load attempt.
+    }
+    return false;
+  }
+
   const loadedVersion = Number(data.save_version || 1);
   game.save_version = loadedVersion;
   game.fv = new Decimal(data.fv || 10);
@@ -1328,17 +1349,18 @@ export const loadGame = () => {
     }
   }
   game.lastTick = Date.now();
+  return true;
 };
 
 export const resetGame = () => {
   showConfirmFn("모든 데이터를 초기화하시겠습니까?", () => {
-    localStorage.removeItem('math_idle_save');
+    localStorage.removeItem(SAVE_KEY);
     location.reload();
   }, "초기화 확인");
 };
 
 // 디버깅 및 테스트용 콘솔 명령어
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
   const getMaxTier2MilestoneAt = () => TIER2_MILESTONES.reduce((max, ms) => Math.max(max, Number(ms.at || 0)), 0);
   const getMaxTier3MilestoneAt = () => TIER3_MILESTONES.reduce((max, ms) => Math.max(max, Number(ms.at || 0)), 0);
 

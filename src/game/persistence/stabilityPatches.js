@@ -1,5 +1,6 @@
 import Decimal from 'break_eternity.js';
-import { game, saveGame } from '../../gameLogic.js';
+import { game } from '../state.js';
+import { saveGame } from '../systems/persistence.js';
 
 const SAVE_KEY = 'math_idle_save';
 const DEFAULT_LIMIT = {
@@ -13,6 +14,7 @@ const EXP_PRICE_GROWTH = 12;
 const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
 const EXP_PRICE_SPIKE_EVERY = 5;
 const PRICE_SPIKE_FACTOR = 10;
+let runtimePatchTimer = null;
 
 const getStorage = () => {
   if (typeof globalThis !== 'undefined' && globalThis.localStorage) return globalThis.localStorage;
@@ -147,11 +149,11 @@ const applyIapProductionLogPatch = () => {
 
 export const applyRuntimeStabilityPatches = () => {
   const timerHost = getTimerHost();
-  if (!timerHost) return;
+  if (!timerHost || runtimePatchTimer !== null) return;
 
   applyIapProductionLogPatch();
 
-  timerHost.setInterval(() => {
+  runtimePatchTimer = timerHost.setInterval(() => {
     if (normalizeRuntimeExpPrice()) {
       saveGame();
     }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPreLoadSavePatches } from '../src/game/persistence/stabilityPatches.js';
+import { applyPreLoadSavePatches, applyRuntimeStabilityPatches } from '../src/game/persistence/stabilityPatches.js';
 
 const SAVE_KEY = 'math_idle_save';
 
@@ -58,4 +58,26 @@ test('applyPreLoadSavePatches preserves extra limit fields', () => {
   assert.equal(patched.limit.lp, '3');
   assert.deepEqual(patched.limit.constants, { euler_e: 1, pi: 2, gamma: 3 });
   assert.equal(patched.limit.limit_count, 4);
+});
+
+test('applyRuntimeStabilityPatches installs its interval once', () => {
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  let intervalCount = 0;
+
+  globalThis.setInterval = () => {
+    intervalCount += 1;
+    return intervalCount;
+  };
+  globalThis.clearInterval = () => {};
+
+  try {
+    applyRuntimeStabilityPatches();
+    applyRuntimeStabilityPatches();
+  } finally {
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+
+  assert.equal(intervalCount, 1);
 });

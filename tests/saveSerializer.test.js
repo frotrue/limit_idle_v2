@@ -136,3 +136,36 @@ test('saveSerializedGameState writes the explicit save object', () => {
   assert.equal(saved.ap_research[0], 'auto_function');
   assert.equal(saved.achievements[0], 'start_1k');
 });
+
+test('legacy saveGame writes the explicit serializer format', async () => {
+  globalThis.localStorage = createMemoryStorage();
+  const { game, saveGame } = await import('../src/gameLogic.js');
+
+  game.fv = new Decimal('12345');
+
+  const result = saveGame();
+  const saved = JSON.parse(globalThis.localStorage.getItem(SAVE_KEY));
+
+  assert.equal(result, true);
+  assert.equal(typeof saved.fv, 'string');
+  assertDecimalEq(saved.fv, '12345');
+  assert.equal(saved.fv.sign, undefined);
+});
+
+test('loadGame backs up malformed saves and starts fresh', async () => {
+  globalThis.localStorage = createMemoryStorage();
+  const raw = '{malformed';
+  const originalWarn = console.warn;
+  globalThis.localStorage.setItem(SAVE_KEY, raw);
+  console.warn = () => {};
+
+  try {
+    const { loadGame } = await import('../src/gameLogic.js');
+
+    assert.equal(loadGame(), false);
+    assert.equal(globalThis.localStorage.getItem(SAVE_KEY), null);
+    assert.equal(globalThis.localStorage.getItem(`${SAVE_KEY}_corrupt`), raw);
+  } finally {
+    console.warn = originalWarn;
+  }
+});
