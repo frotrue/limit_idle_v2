@@ -178,3 +178,22 @@ test('loadGame backs up malformed saves and starts fresh', async () => {
     console.warn = originalWarn;
   }
 });
+
+test('loadGame preserves achievements when legacy save has no limit data', async () => {
+  globalThis.localStorage = createMemoryStorage();
+  const legacySave = {
+    save_version: 2,
+    fv: '1e12',
+    achievements: ['start_1k', 'diff_first'],
+    ap_research: ['auto_function']
+  };
+  globalThis.localStorage.setItem(SAVE_KEY, JSON.stringify(legacySave));
+
+  const { game, loadGame } = await import('../src/gameLogic.js');
+
+  assert.equal(loadGame(), true);
+  assert.deepEqual(game.achievements, legacySave.achievements);
+  assert.equal(game.limit.lp.eq(0), true);
+  assert.deepEqual(game.limit.constants, { euler_e: 0, pi: 0, gamma: 0 });
+  assert.equal(game.limit.limit_count, 0);
+});

@@ -56,7 +56,7 @@ node scripts/simulate.js --seconds=120 --strategy=passive
 node scripts/simulate.js --hours=24 --long-run --purchase-every=600
 node scripts/simulate.js --hours=1 --no-pow-cache
 node scripts/simulate.js --minutes=10 --json
-node scripts/simulate.js --hours=1 --expect=firstDifferentiation:15m:25m
+node scripts/simulate.js --hours=1 --expect=firstDifferentiation:8m:12m
 ```
 
 Key options:

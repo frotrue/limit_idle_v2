@@ -8,10 +8,23 @@
 
     <section class="panel-section">
       <div class="section-title">Differentiation</div>
+      <div class="differentiation-preview">
+        <div>
+          <span>Condition</span>
+          <strong>FV {{ format(game.fv) }} / {{ format(preview.requirement) }}</strong>
+        </div>
+        <div>
+          <span>Reward Preview</span>
+          <strong>{{ format(preview.dxGain) }} DX / {{ format(preview.apGain) }} AP</strong>
+        </div>
+      </div>
       <button class="prestige-action" @click="differentiate_bt">
         <span>Differentiate f(x)</span>
-        <small>현재 진행도를 초기화하고 DX/AP를 획득합니다.</small>
+        <small>미분하면 현재 Variable 진행은 초기화되고 DX/AP는 영구 성장에 쓰입니다.</small>
       </button>
+      <p class="section-subtitle">
+        {{ preview.canDifferentiate ? '조건을 만족했습니다. 첫 미분으로 다음 성장 속도를 올릴 수 있습니다.' : `미분하려면 ${format(preview.requirement)} FV가 필요합니다.` }}
+      </p>
     </section>
 
     <section class="panel-section">
@@ -44,9 +57,20 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import Decimal from 'break_eternity.js'
 import UpgradeCard from '@/components/UpgradeCard.vue'
-import { game, format, differentiate_bt, buyOtherUpgrade, buyMaxOtherUpgrade, buyMaxAllOtherUpgrades } from '@/game'
+import {
+  game,
+  format,
+  getDifferentiationPreview,
+  differentiate_bt,
+  buyOtherUpgrade,
+  buyMaxOtherUpgrade,
+  buyMaxAllOtherUpgrades
+} from '@/game'
+
+const preview = computed(() => getDifferentiationPreview())
 
 const getUpgradeCurrencyLabel = (upg) => {
   if (upg.currency) return upg.currency

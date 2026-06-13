@@ -224,6 +224,7 @@ export const runSimulation = async (argv = []) => {
       buyMaxUpgrade,
       buyMaxAllOtherUpgrades,
       differentiate_bt,
+      DIFFERENTIATION_FV_REQUIREMENT,
       buyExpUpgrade,
       integrate_bt,
       canIntegrate,
@@ -293,9 +294,9 @@ export const runSimulation = async (argv = []) => {
       buyMaxAllOtherUpgrades('ddx');
       tryBuyResearch();
 
-      if (options.strategy === 'active' && game.fv.gte('1e10')) {
+      if (options.strategy === 'active' && game.fv.gte(DIFFERENTIATION_FV_REQUIREMENT)) {
         differentiate_bt();
-      } else if (game.fv.gte('1e12')) {
+      } else if (game.fv.gte(DIFFERENTIATION_FV_REQUIREMENT)) {
         differentiate_bt();
       }
 

@@ -14,6 +14,14 @@
         </div>
       </div>
 
+      <div class="settings-row">
+        <div>
+          <strong>Tutorial</strong>
+          <p>처음 시작할 때 보이는 핵심 성장 안내를 다시 엽니다.</p>
+        </div>
+        <button class="sub-btn" @click="$emit('show-tutorial')">Show Tutorial</button>
+      </div>
+
       <div class="settings-actions">
         <button class="sub-btn" @click="saveGame">Save Game</button>
         <button class="sub-btn danger" @click="resetGame">Reset Data</button>
@@ -24,6 +32,8 @@
 
 <script setup>
 import { game, saveGame, resetGame } from '@/game'
+
+defineEmits(['show-tutorial'])
 
 const setLayoutMode = (mode) => {
   game.ui.layoutMode = mode

@@ -23,6 +23,7 @@ const SAVE_VERSION = 3;
 const CORRUPT_SAVE_KEY = `${SAVE_KEY}_corrupt`;
 const EXP_REBIRTH_BASE_GAIN = 0.05;
 const INTEGRAL_UNLOCK_EXP_REQ = 1.5;
+export const DIFFERENTIATION_FV_REQUIREMENT = '1e5';
 
 export const game = reactive({
   save_version: SAVE_VERSION,
@@ -31,7 +32,7 @@ export const game = reactive({
   fx_str: "1",
   current_x: new Decimal(0),
   max_x: new Decimal(1),
-  x_increase: new Decimal(0.1),
+  x_increase: new Decimal(0.105),
   x_upgrades: {
     0: { id: 0, name: 'Upgrade x⁰', price: new Decimal(10), effect: 0.01, type: 'add', level: 0 },
     1: { id: 1, name: 'Upgrade x¹', price: new Decimal(100), effect: 0.05, type: 'add', level: 0 },
@@ -304,7 +305,26 @@ export const setAlertCallbacks = (alertCb, confirmCb) => {
   showConfirmFn = confirmCb;
 };
 
-const canDifferentiateNow = () => game.fv.gte('1e10');
+export const canDifferentiateNow = () => game.fv.gte(DIFFERENTIATION_FV_REQUIREMENT);
+
+const getDifferentiationRewards = () => {
+  const rawGain = differentiate(game.fx, game.prestige_x);
+  const tier2 = getTier2Bonuses();
+  const researchBonuses = getResearchBonuses(game.ap_research);
+  const gammaLevel = game.limit?.constants?.gamma || 0;
+  const gammaMult = LIMIT_CONSTANTS.find(c => c.id === 'gamma').getEffect(gammaLevel);
+  const dxGain = rawGain.times(researchBonuses.dxGainMultiplier).times(gammaMult);
+  const apGain = Decimal.max(1, dxGain.plus(1).log10().floor().times(tier2.apGainMultiplier).floor())
+    .times(gammaMult)
+    .plus(getAchievementExtraAp(game.achievements));
+  return { dxGain, apGain };
+};
+
+export const getDifferentiationPreview = () => ({
+  requirement: DIFFERENTIATION_FV_REQUIREMENT,
+  canDifferentiate: canDifferentiateNow(),
+  ...getDifferentiationRewards()
+});
 
 const isAutoDifferentiateUnlocked = () => {
   const auto = game.auto_upgrades.find((a) => a.targetType === 'differentiate');
@@ -364,14 +384,8 @@ const performDifferentiation = () => {
   // Hard guard: never allow differentiation below requirement, regardless of UI state.
   if (!canDifferentiateNow()) return null;
 
-  const rawGain = differentiate(game.fx, game.prestige_x);
   const tier2 = getTier2Bonuses();
-  const researchBonuses = getResearchBonuses(game.ap_research);
-  // AP 연구 DX 배율 적용
-  const gammaLevel = game.limit?.constants?.gamma || 0;
-  const gammaMult = LIMIT_CONSTANTS.find(c => c.id === 'gamma').getEffect(gammaLevel);
-  const gain = rawGain.times(researchBonuses.dxGainMultiplier).times(gammaMult);
-  const apGain = Decimal.max(1, gain.plus(1).log10().floor().times(tier2.apGainMultiplier).floor()).times(gammaMult).plus(getAchievementExtraAp(game.achievements));
+  const { dxGain: gain, apGain } = getDifferentiationRewards();
   game.dx_points = game.dx_points.plus(gain);
   game.ap_points = game.ap_points.plus(apGain);
   game.dx_multiplier = game.dx_multiplier.plus(gain);
@@ -386,17 +400,18 @@ const performDifferentiation = () => {
 
 export const differentiate_bt = () => {
   if (canDifferentiateNow()) {
-    showConfirmFn("미분 시 현재 모든 함수가 초기화되고 보상을 얻습니다.\n미분 시 f'(" + game.prestige_x + ") = " + format(differentiate(game.fx, game.prestige_x)) + " 만큼의 DX를 얻습니다", () => {
+    const preview = getDifferentiationPreview();
+    showConfirmFn(`미분하면 현재 Variable 진행이 초기화됩니다.\n획득 예정: ${format(preview.dxGain)} DX, ${format(preview.apGain)} AP\nDX/AP는 영구 성장과 다음 미분 가속에 사용됩니다.`, () => {
       const result = performDifferentiation();
       if (!result) {
-        showAlertFn("미분하려면 최소 1.00e10 FV가 필요합니다.", '알림');
+        showAlertFn(`미분하려면 최소 ${format(DIFFERENTIATION_FV_REQUIREMENT)} FV가 필요합니다.`, '알림');
         return;
       }
       const { gain, apGain } = result;
       showAlertFn(`${format(gain)} DX, ${format(apGain)} AP를 획득했습니다!`, '알림');
     }, "미분 확인");
   } else {
-    showAlertFn("미분하려면 최소 1.00e10 FV가 필요합니다.", '알림');
+    showAlertFn(`미분하려면 최소 ${format(DIFFERENTIATION_FV_REQUIREMENT)} FV가 필요합니다.`, '알림');
   }
 };
 
@@ -1133,7 +1148,7 @@ export const loadGame = () => {
   game.fv = new Decimal(data.fv || 10);
   game.current_x = new Decimal(data.current_x || 0);
   game.max_x = Decimal.min(getMaxXHardCap(), new Decimal(data.max_x || 1));
-  game.x_increase = new Decimal(data.x_increase || 0.05);
+  game.x_increase = new Decimal(data.x_increase || 0.105);
   if (game.x_increase.gt(game.max_x)) game.x_increase = game.max_x;
   game.prestige_x = new Decimal(data.prestige_x || 1);
   game.dx_points = new Decimal(data.dx_points || 0);
@@ -1196,13 +1211,14 @@ export const loadGame = () => {
     game.achievements = [];
   }
 
-  if (data.limit) {
-    game.limit.lp = new Decimal(data.limit.lp || 0);
-    game.limit.constants = data.limit.constants || { euler_e: 0, pi: 0, gamma: 0 };
-    game.limit.limit_count = Number(data.limit.limit_count || 0);
-  } else {
-    game.achievements = [];
-  }
+  const savedLimit = data.limit || {};
+  game.limit.lp = new Decimal(savedLimit.lp || 0);
+  game.limit.constants = {
+    euler_e: Number(savedLimit.constants?.euler_e || 0),
+    pi: Number(savedLimit.constants?.pi || 0),
+    gamma: Number(savedLimit.constants?.gamma || 0)
+  };
+  game.limit.limit_count = Number(savedLimit.limit_count || 0);
 
   // 히스토리 복원
   if (data.history && Array.isArray(data.history.fv_per_sec)) {

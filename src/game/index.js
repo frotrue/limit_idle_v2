@@ -29,6 +29,9 @@ export {
 } from './systems/upgrades.js';
 
 export {
+  DIFFERENTIATION_FV_REQUIREMENT,
+  canDifferentiateNow,
+  getDifferentiationPreview,
   differentiate_bt,
   integrate_bt,
   buyExpUpgrade,

@@ -69,14 +69,14 @@ made by frotrue
           </nav>
 
           <DerivativeTab v-if="activeSystemTab === 'fdx'" />
-          <ShopTab v-else-if="activeSystemTab === 'shop'" @alert="showAlert" />
+          <ShopTab v-else-if="isIapEnabled && activeSystemTab === 'shop'" @alert="showAlert" />
           <ExponentialTab v-else-if="activeSystemTab === 'exp'" />
           <IntegralTab v-else-if="activeSystemTab === 'integral'" />
           <LimitTab v-else-if="activeSystemTab === 'limit'" @select-tab="activeTab = $event" />
         </section>
 
         <StatsTab v-else-if="activeTab === 'stats'" />
-        <SettingsTab v-else-if="activeTab === 'settings'" />
+        <SettingsTab v-else-if="activeTab === 'settings'" @show-tutorial="showTutorial" />
       </main>
 
       <CustomAlert
@@ -88,12 +88,26 @@ made by frotrue
         @confirm="handleAlertConfirm"
         @cancel="handleAlertCancel"
       />
+
+      <div v-if="tutorialVisible" class="tutorial-overlay" @click.self="dismissTutorial">
+        <section class="tutorial-card" aria-label="Tutorial">
+          <div class="section-title">Limit Idle</div>
+          <div class="tutorial-steps">
+            <article v-for="(step, index) in tutorialSteps" :key="step" class="tutorial-step">
+              <span>{{ index + 1 }}</span>
+              <p>{{ step }}</p>
+            </article>
+          </div>
+          <button class="sub-btn" @click="dismissTutorial">Start</button>
+        </section>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref, onMounted, onUnmounted, watchEffect } from 'vue'
+import { App as CapacitorApp } from '@capacitor/app'
 import { Activity, Bot, Calculator, Gauge, Infinity, Layers, Settings, ShoppingBag, Sigma } from 'lucide-vue-next'
 import CustomAlert from './components/CustomAlert.vue'
 import VariableTab from './components/tabs/VariableTab.vue'
@@ -106,12 +120,31 @@ import StatsTab from './components/tabs/StatsTab.vue'
 import LimitTab from './components/tabs/LimitTab.vue'
 import SettingsTab from './components/tabs/SettingsTab.vue'
 
-import { game, format, makefx, setAlertCallbacks, manualTick, saveGame, loadGame } from '@/game'
+import {
+  DIFFERENTIATION_FV_REQUIREMENT,
+  game,
+  format,
+  getDifferentiationPreview,
+  makefx,
+  setAlertCallbacks,
+  manualTick,
+  saveGame,
+  loadGame
+} from '@/game'
 
 const activeTab = ref('fx')
 const activeSystemTab = ref('fdx')
+const isIapEnabled = import.meta.env.VITE_ENABLE_IAP === 'true'
+const ONBOARDING_STORAGE_KEY = 'limit_idle_onboarding_v1_seen'
+const tutorialVisible = ref(false)
+const tutorialSteps = [
+  'FV는 f(x)가 만들어내는 값입니다.',
+  '계수를 올리면 f(x)가 커지고 FV 생산이 빨라집니다.',
+  '충분히 커지면 미분해서 DX/AP를 얻고 다시 빠르게 성장합니다.'
+]
 
 const isSystemTabVisible = (tabId) => {
+  if (tabId === 'shop') return isIapEnabled
   if (tabId === 'exp') return game.unlocked_exp
   if (tabId === 'integral') return game.unlocked_integral
   if (tabId === 'limit') return game.integral_count >= 50 || (game.limit && game.limit.limit_count > 0)
@@ -148,13 +181,44 @@ const xProgressPercent = computed(() => {
   return Math.max(0, Math.min(100, pct))
 })
 
+const differentiationPreview = computed(() => getDifferentiationPreview())
+
 const nextGoal = computed(() => {
+  if (!game.unlocked_exp && game.differentiationCount.lte(0)) {
+    if (differentiationPreview.value.canDifferentiate) return 'First Differentiation ready'
+    return `First Differentiation: FV ${format(game.fv)} / ${format(DIFFERENTIATION_FV_REQUIREMENT)}`
+  }
   if (!game.unlocked_exp) return `Unlock Exponential: ${format(game.dx_points)} / 1e10 DX`
   if (!game.unlocked_integral) return 'Reach exponent 1.50 for Integration'
   if (game.integral_count < 50) return `Limit unlock: Integral ${game.integral_count} / 50`
   if (game.limit && game.limit.limit_count <= 0) return 'Build enough FV for first LP'
   return 'Push FV and LP upgrades'
 })
+
+const readOnboardingSeen = () => {
+  try {
+    return window.localStorage?.getItem(ONBOARDING_STORAGE_KEY) === 'true'
+  } catch (_err) {
+    return true
+  }
+}
+
+const markOnboardingSeen = () => {
+  try {
+    window.localStorage?.setItem(ONBOARDING_STORAGE_KEY, 'true')
+  } catch (_err) {
+    // Tutorial state is optional; gameplay save still owns durable progress.
+  }
+}
+
+const showTutorial = () => {
+  tutorialVisible.value = true
+}
+
+const dismissTutorial = () => {
+  tutorialVisible.value = false
+  markOnboardingSeen()
+}
 
 const appClass = computed(() => ({
   'layout-mobile': game.ui?.layoutMode === 'mobile',
@@ -214,12 +278,50 @@ setAlertCallbacks(showAlert, showConfirm)
 
 let manualTickTimer = null
 let saveTimer = null
+let capacitorLifecycleHandles = []
+
+const saveBeforeSuspend = () => {
+  saveGame()
+}
+
+const restoreAfterResume = () => {
+  loadGame()
+  makefx()
+}
+
+const saveWhenHidden = () => {
+  if (document.visibilityState === 'hidden') saveBeforeSuspend()
+}
+
+const addCapacitorLifecycleListener = (eventName, handler) => {
+  if (!CapacitorApp?.addListener) return
+
+  try {
+    capacitorLifecycleHandles.push(CapacitorApp.addListener(eventName, handler))
+  } catch (err) {
+    console.warn(`[Limit Idle] Failed to register Capacitor ${eventName} listener:`, err)
+  }
+}
+
+const removeCapacitorLifecycleListeners = () => {
+  capacitorLifecycleHandles.forEach((handle) => {
+    Promise.resolve(handle)
+      .then((resolvedHandle) => resolvedHandle?.remove?.())
+      .catch((err) => console.warn('[Limit Idle] Failed to remove Capacitor lifecycle listener:', err))
+  })
+  capacitorLifecycleHandles = []
+}
 
 onMounted(() => {
   loadGame()
   makefx()
+  if (!readOnboardingSeen()) showTutorial()
   manualTickTimer = window.setInterval(manualTick, 100)
   saveTimer = window.setInterval(saveGame, 30000)
+  document.addEventListener('visibilitychange', saveWhenHidden)
+  window.addEventListener('pagehide', saveBeforeSuspend)
+  addCapacitorLifecycleListener('pause', saveBeforeSuspend)
+  addCapacitorLifecycleListener('resume', restoreAfterResume)
 })
 
 onUnmounted(() => {
@@ -231,5 +333,8 @@ onUnmounted(() => {
     window.clearInterval(saveTimer)
     saveTimer = null
   }
+  document.removeEventListener('visibilitychange', saveWhenHidden)
+  window.removeEventListener('pagehide', saveBeforeSuspend)
+  removeCapacitorLifecycleListeners()
 })
 </script>
