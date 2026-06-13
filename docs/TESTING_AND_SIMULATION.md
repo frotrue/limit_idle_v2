@@ -1,10 +1,9 @@
 # Testing and Simulation
 
-Phase 3 adds a lightweight test and simulation harness without adding new npm dependencies.
+The project uses Node's built-in test runner and a lightweight simulation
+harness. No extra test framework dependency is required.
 
 ## Test runner
-
-The project uses Node's built-in test runner.
 
 ```bash
 npm test
@@ -13,25 +12,27 @@ npm test
 Current coverage:
 
 - `tests/polynomial.test.js`
-  - polynomial evaluation
-  - derivative coefficient generation
-  - derivative evaluation at x
-  - antiderivative evaluation with C = 0
-  - zero-coefficient handling
+  - polynomial evaluation, differentiation, integration, and zero coefficients
 - `tests/facades.test.js`
-  - legacy `src/calc.js` compatibility facade
+  - legacy `src/calc.js` facade
   - public `src/game/index.js` API smoke checks
 - `tests/stabilityPatches.test.js`
-  - legacy save patch behavior
-  - default Limit data migration without clearing achievements/research
+  - legacy save migration
+  - Limit data normalization
+  - runtime patch interval idempotency
 - `tests/decimalPowCache.test.js`
-  - Decimal pow cache installation
-  - static `Decimal.pow` caching
-  - instance `.pow()` caching
+  - Decimal pow cache installation and cache behavior
+- `tests/buyMaxOtherUpgrade.test.js`
+  - optimized buy-max behavior for utility upgrades
+- `tests/saveSerializer.test.js`
+  - explicit save serialization
+  - bounded history serialization
+  - legacy save path using the serializer
+  - malformed save backup and recovery
 
 ## Simulation runner
 
-The simulation runner uses the real game modules and runs the tick loop in Node.
+The simulator imports the real game API and advances the tick loop in Node.
 
 ```bash
 npm run sim
@@ -40,19 +41,7 @@ npm run sim:1h
 npm run sim:24h
 ```
 
-The runner now prints CLI progress while it runs. In an interactive terminal it rewrites a single progress line with:
-
-- simulated progress percentage
-- simulated time / total simulated time
-- real elapsed time
-- estimated remaining real time
-- FV, DX, Exp points, and Integral count
-
-`sim:24h` uses long-run defaults so it does not run the expensive purchase strategy every simulated second.
-
-The simulator also installs the Decimal pow cache by default and prints cache hit/miss statistics in the final report.
-
-## Useful options
+Useful direct commands:
 
 ```bash
 node scripts/simulate.js --minutes=30 --strategy=balanced
@@ -62,37 +51,35 @@ node scripts/simulate.js --hours=24 --long-run --purchase-every=600
 node scripts/simulate.js --hours=1 --no-pow-cache
 ```
 
-Options:
+Key options:
 
 - `--progress=false` or `--no-progress`: disable progress output.
 - `--progress-every-ms=500`: throttle progress redraws.
 - `--purchase-every=600`: run the purchase strategy every N ticks.
 - `--event-limit=200`: keep at most N alerts/milestones in memory.
-- `--max-real-seconds=120`: abort and print a partial report if real runtime exceeds N seconds.
-- `--long-run`: enables long-run defaults, including less frequent purchasing when no explicit purchase interval is provided.
-- `--pow-cache=false` or `--no-pow-cache`: disable Decimal pow caching for A/B comparison.
-- `--pow-cache-size=4096`: set Decimal pow cache entry capacity.
+- `--max-real-seconds=120`: abort and print a partial report after a real-time limit.
+- `--long-run`: enable long-run defaults for expensive simulations.
+- `--pow-cache=false` or `--no-pow-cache`: disable Decimal pow caching.
+- `--pow-cache-size=4096`: set Decimal pow cache capacity.
 
 ## Strategies
 
-- `passive`
-  - buys FV/variable upgrades only
-  - does not manually prestige
-- `balanced`
-  - buys FV/variable upgrades
-  - buys DX/AP utility upgrades when affordable
-  - purchases AP research when affordable
-  - differentiates at a higher FV threshold
-  - buys Exponential and Integral rebirths when available
-- `active`
-  - same as balanced
-  - differentiates at the minimum FV threshold
+- `passive`: buys FV/variable upgrades only.
+- `balanced`: buys FV/variable, DX/AP utility, AP research, and prestige layers
+  when affordable.
+- `active`: same as balanced, but differentiates at the lower active threshold.
 
-## Why this matters
+## Recommended checks
 
-Incremental games are difficult to balance manually. This harness makes it possible to compare changes by running the same duration and strategy before/after a balance patch.
+Before ordinary refactors:
 
-Suggested checks before merging balance changes:
+```bash
+npm test
+npm run build
+npm audit --audit-level=moderate
+```
+
+Before balance or progression changes:
 
 ```bash
 npm test
@@ -101,7 +88,7 @@ npm run sim:1h
 npm run build
 ```
 
-For larger balancing passes, also run:
+For larger balance passes:
 
 ```bash
 npm run sim:24h
@@ -109,9 +96,9 @@ npm run sim:24h
 
 ## Next improvements
 
-1. Add JSON output mode for automated comparison.
-2. Add expected milestone windows, for example first differentiation should happen between X and Y minutes.
-3. Add separate strategies for active clicker, idle-only, automation-heavy, and late-game runs.
-4. Add save/load roundtrip tests once persistence is extracted from `gameLogic.js`.
-5. Add max-buy equivalence tests comparing repeated single buys against buy-max results.
-6. Add event-based long-run simulation for 7-day and 30-day balance checks.
+1. Add `--json` output for automated before/after comparison.
+2. Add milestone window assertions, such as first differentiation between
+   expected minute ranges.
+3. Add save/load roundtrip tests covering Decimal-heavy state.
+4. Add max-buy equivalence tests against repeated single buys.
+5. Add separate idle-only, automation-heavy, and late-game simulation strategies.

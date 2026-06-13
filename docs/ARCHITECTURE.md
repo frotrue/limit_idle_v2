@@ -2,100 +2,72 @@
 
 ## Current status
 
-Limit Idle started as a compact Vue prototype. Most gameplay behavior still lives in `src/gameLogic.js`, while the UI is concentrated in `src/App.vue`.
+Limit Idle is a Vue incremental game with a stable public game API under
+`src/game/`. The app UI imports gameplay behavior from `@/game`, while the
+large legacy `src/gameLogic.js` file still owns much of the implementation.
 
-Phase 2 does not rewrite those large files in one step. Instead, it introduces a safe module boundary under `src/game/` and keeps compatibility facades so existing behavior remains stable.
+The current architecture is intentionally transitional: new code should depend
+on `src/game/` boundaries, and implementation can move out of `gameLogic.js`
+one subsystem at a time with tests.
 
-## New structure
+## Source layout
 
 ```text
 src/
+  App.vue                  Main UI shell and tab views
+  main.js                  App startup, pow cache, save compatibility patches
+  gameLogic.js             Legacy gameplay implementation and state source
+  calc.js                  Legacy math facade
+  utils.js                 Legacy formatting facade
+  achievements.js          Legacy achievement data/source
+  apResearch.js            Legacy AP research data/source
+  tier2/                   Legacy Tier 2 milestone data
+  tier3/                   Legacy Tier 3 milestone data
+  tier4/                   Legacy Limit data and formulas
+
+  components/
+    CustomAlert.vue        Modal alert/confirm UI
+    LineChart.vue          FV/sec history chart
+
   game/
-    index.js
-    state.js
-    formatting.js
-    math/
-      polynomial.js
-    systems/
-      automation.js
-      limitSystem.js
-      persistence.js
-      prestige.js
-      progression.js
-      research.js
-      upgrades.js
-    data/
-      achievements.js
-      apResearch.js
-      limitConstants.js
-      tier2Milestones.js
-      tier3Milestones.js
-    persistence/
-      saveSerializer.js
-      stabilityPatches.js
+    index.js               Public game API for UI, scripts, and tests
+    state.js               Reactive game state facade
+    formatting.js          Formatting facade
+    math/                  Pure math helpers
+    systems/               Gameplay system modules and facades
+    data/                  Stable data import paths
+    performance/           Runtime performance patches
+    persistence/           Save serialization and compatibility patches
 ```
 
-## Responsibilities
+## Module boundaries
 
-### `game/math`
+- `@/game` is the only import path UI code should use for gameplay state,
+  actions, data, and formatting.
+- `game/math` must stay pure: no Vue state, DOM, localStorage, timers, or alerts.
+- `game/persistence/saveSerializer.js` owns the explicit save object shape.
+  Both legacy and public save paths write through this serializer.
+- `game/persistence/stabilityPatches.js` owns startup/runtime compatibility
+  patches before and after Vue mounts.
+- `game/systems/*` should become the long-term home for implementation. Some
+  files still delegate to `gameLogic.js`; move those implementations gradually.
 
-Pure deterministic math helpers. These should stay free of Vue state, localStorage, DOM, timers, and alerts.
+## Cleanup state
 
-Current module:
+Completed cleanup:
 
-- `polynomial.js`: polynomial evaluation, derivative, and integral helpers.
+- `App.vue` imports gameplay through `@/game`.
+- The old Vite alias that rewired `./gameLogic.js` was removed.
+- Save writes now use explicit serialization instead of `JSON.stringify(game)`.
+- Corrupt saves are backed up to `math_idle_save_corrupt` and ignored safely.
+- Unused Vue starter components and icon examples were removed.
+- The unused Vue devtools plugin dependency was removed.
 
-### `game/state`
+## Next safe PRs
 
-The stable import path for the reactive game state.
-
-### `game/systems`
-
-Gameplay behavior grouped by responsibility:
-
-- `progression`: ticks, formula string generation, milestone state, current production values.
-- `upgrades`: buy one, buy max, and buy max all behavior.
-- `prestige`: differentiation, exponential rebirth, integration, and prestige resets.
-- `automation`: automatic purchases and automatic prestige actions.
-- `research`: AP research tree behavior.
-- `limitSystem`: Limit reset and LP/constant behavior.
-- `persistence`: save/load/reset alert callback facade. The `@/game` save path now uses explicit serialization instead of `JSON.stringify(game)`.
-
-At this stage, most of these files are still facades over `gameLogic.js`. Future PRs should move implementation code into these modules one system at a time.
-
-### `game/data`
-
-Stable import paths for static game data such as achievements, AP research nodes, milestones, and Limit constants.
-
-### `game/persistence`
-
-Persistence helpers and compatibility fixes:
-
-- `saveSerializer.js`: explicit save object creation and localStorage writing.
-- `stabilityPatches.js`: startup/runtime save migration and compatibility patches.
-
-Legacy internal calls inside `gameLogic.js` still use the old save function until the remaining reset/save call sites are extracted.
-
-## UI routing status
-
-`App.vue` still contains a legacy `./gameLogic.js` import in source. For now, Vite routes that UI import to `src/game/index.js` through `vite.config.js`. This lets the running app use optimized `src/game` facades without rewriting the large `App.vue` file in one risky change.
-
-The next cleanup should replace the source import directly and then split tab panes into smaller components.
-
-## Migration strategy
-
-The safest migration order is:
-
-1. Keep `gameLogic.js` as the source of truth.
-2. Add facades under `src/game/`.
-3. Route or migrate UI imports to `src/game/index.js`.
-4. Extract one pure subsystem at a time.
-5. Add test coverage for each extracted subsystem before moving the next one.
-
-## Suggested next PRs
-
-1. Replace the remaining `App.vue` source import with direct `src/game/index.js` imports when the file is split or edited safely.
-2. Extract price formulas and softcap/hardcap helpers into `game/balance/formulas.js`.
-3. Move reset/save call sites inside `gameLogic.js` toward the persistence facade.
-4. Add save/load roundtrip tests once load migration is extracted.
-5. Split tab panes into components after import migration.
+1. Add simulation JSON output and expected milestone windows.
+2. Add full save/load roundtrip tests for Decimal-heavy game state.
+3. Extract balance formulas from `gameLogic.js` into pure modules.
+4. Split `App.vue` tab panes into focused components.
+5. Move one `game/systems/*` facade at a time from delegation to real
+   implementation.

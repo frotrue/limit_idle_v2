@@ -1,36 +1,47 @@
-# Game Module Boundaries
+# Game Module Boundary
 
-This directory is the new architecture boundary for the core Limit Idle game code.
+`src/game/` is the stable boundary for game-facing imports. UI, scripts, and
+tests should import from `@/game` or specific `src/game/*` modules instead of
+reaching directly into legacy source files.
 
-The current project still keeps the legacy `src/gameLogic.js` file as the source of truth. Phase 2 introduces stable facades under `src/game/` so UI components and future systems can depend on smaller modules instead of importing the large legacy file directly.
+## Public API
+
+Use the aggregate API for app-level gameplay access:
+
+```js
+import { game, manualTick, buyUpgrade, saveGame } from '@/game'
+```
+
+`index.js` re-exports stable state, actions, data, formatting, performance, and
+persistence entry points.
 
 ## Directory map
 
 ```text
 src/game/
-  index.js                 Public API for game-facing imports
-  state.js                 Reactive game state facade
-  formatting.js            Number/text formatting facade
-  math/                    Pure math helpers
-  systems/                 Gameplay system facades
-  data/                    Static game data facades
-  persistence/             Save/load and startup stability patches
+  index.js          Public API surface
+  state.js          Reactive state facade backed by gameLogic.js
+  formatting.js     Formatting facade
+  math/             Pure deterministic helpers
+  systems/          Gameplay systems and transitional facades
+  data/             Stable data import paths
+  performance/      Runtime performance helpers
+  persistence/      Save serialization and compatibility patches
 ```
 
-## Migration rule
+## Rules
 
-New code should prefer imports from `src/game/`:
+- New UI code imports gameplay through `@/game`.
+- Pure math and balance helpers should not import Vue state or browser APIs.
+- Save writes go through `persistence/saveSerializer.js`.
+- Compatibility patches live in `persistence/stabilityPatches.js`.
+- Direct `gameLogic.js` imports are allowed only inside transitional facades or
+  tests that explicitly cover legacy compatibility.
 
-```js
-import { game, manualTick, buyUpgrade } from '@/game'
-```
+## Next extraction targets
 
-Existing code can keep using `src/gameLogic.js` until it is migrated in smaller follow-up PRs.
-
-## Next safe extraction targets
-
-1. Move pure constants and price formulas out of `gameLogic.js`.
-2. Move save/load into `game/persistence/`.
-3. Move auto-upgrade behavior into `game/systems/automation.js`.
-4. Move prestige reset logic into `game/systems/prestige.js`.
-5. Replace direct `gameLogic.js` imports in UI components with `@/game` imports.
+1. Move price, softcap, and hardcap formulas into pure balance helpers.
+2. Move load/reset behavior fully into persistence modules.
+3. Move `manualTick` and production calculations into progression modules.
+4. Move prestige reset behavior into prestige modules.
+5. Move automation behavior into automation modules.
