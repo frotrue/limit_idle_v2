@@ -29,6 +29,12 @@ Current coverage:
   - bounded history serialization
   - legacy save path using the serializer
   - malformed save backup and recovery
+- `tests/simulateOptions.test.js`
+  - simulation duration parsing
+  - milestone expectation parsing and pass/fail evaluation
+- `tests/balanceFormulas.test.js`
+  - shared price spike, softcap, hardcap, exponential price, and geometric
+    bulk-buy formulas
 
 ## Simulation runner
 
@@ -49,6 +55,8 @@ node scripts/simulate.js --hours=2 --strategy=active
 node scripts/simulate.js --seconds=120 --strategy=passive
 node scripts/simulate.js --hours=24 --long-run --purchase-every=600
 node scripts/simulate.js --hours=1 --no-pow-cache
+node scripts/simulate.js --minutes=10 --json
+node scripts/simulate.js --hours=1 --expect=firstDifferentiation:15m:25m
 ```
 
 Key options:
@@ -61,6 +69,18 @@ Key options:
 - `--long-run`: enable long-run defaults for expensive simulations.
 - `--pow-cache=false` or `--no-pow-cache`: disable Decimal pow caching.
 - `--pow-cache-size=4096`: set Decimal pow cache capacity.
+- `--json`: print a machine-readable simulation report.
+- `--expect=<milestone>:<min>:<max>`: assert a milestone happened in a duration
+  window. This flag can be repeated.
+
+Supported expectation milestones:
+
+- `firstDifferentiation`
+- `expUnlocked`
+- `firstExp`
+- `firstResearch`
+- `integralUnlocked`
+- `firstIntegral`
 
 ## Strategies
 
@@ -84,6 +104,7 @@ Before balance or progression changes:
 ```bash
 npm test
 npm run sim:10m
+npm run sim:check
 npm run sim:1h
 npm run build
 ```
@@ -96,9 +117,6 @@ npm run sim:24h
 
 ## Next improvements
 
-1. Add `--json` output for automated before/after comparison.
-2. Add milestone window assertions, such as first differentiation between
-   expected minute ranges.
-3. Add save/load roundtrip tests covering Decimal-heavy state.
-4. Add max-buy equivalence tests against repeated single buys.
-5. Add separate idle-only, automation-heavy, and late-game simulation strategies.
+1. Add save/load roundtrip tests covering Decimal-heavy state.
+2. Add max-buy equivalence tests against repeated single buys.
+3. Add separate idle-only, automation-heavy, and late-game simulation strategies.

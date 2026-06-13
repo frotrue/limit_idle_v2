@@ -21,6 +21,7 @@ persistence entry points.
 src/game/
   index.js          Public API surface
   state.js          Reactive state facade backed by gameLogic.js
+  balance/          Pure deterministic balance formulas
   formatting.js     Formatting facade
   math/             Pure deterministic helpers
   systems/          Gameplay systems and transitional facades
@@ -33,6 +34,8 @@ src/game/
 
 - New UI code imports gameplay through `@/game`.
 - Pure math and balance helpers should not import Vue state or browser APIs.
+- Price, softcap, hardcap, and bulk-cost logic should live in `balance/` unless
+  it is still intentionally transitional.
 - Save writes go through `persistence/saveSerializer.js`.
 - Compatibility patches live in `persistence/stabilityPatches.js`.
 - Direct `gameLogic.js` imports are allowed only inside transitional facades or
@@ -40,8 +43,7 @@ src/game/
 
 ## Next extraction targets
 
-1. Move price, softcap, and hardcap formulas into pure balance helpers.
-2. Move load/reset behavior fully into persistence modules.
-3. Move `manualTick` and production calculations into progression modules.
-4. Move prestige reset behavior into prestige modules.
-5. Move automation behavior into automation modules.
+1. Move load/reset behavior fully into persistence modules.
+2. Move `manualTick` and production calculations into progression modules.
+3. Move prestige reset behavior into prestige modules.
+4. Move automation behavior into automation modules.

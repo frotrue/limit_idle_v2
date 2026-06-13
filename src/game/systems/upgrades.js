@@ -2,24 +2,20 @@ import Decimal from 'break_eternity.js';
 import { game } from '../state.js';
 import { LIMIT_CONSTANTS } from '../data/limitConstants.js';
 import {
+  MAX_PRICE,
+  geometricBulkCost,
+  getMaxXHardCap as getMaxXHardCapFromPiEffect,
+  getMaxXUpgradeGain as getMaxXUpgradeGainForCap,
+  getPriceSpikeMultiplier,
+  maxAffordableGeometricCount
+} from '../balance/formulas.js';
+import {
   buyUpgrade,
   buyOtherUpgrade as legacyBuyOtherUpgrade,
   buyMaxUpgrade
 } from '../../gameLogic.js';
 
-const PRICE_SPIKE_FACTOR = 10;
-const BASE_MAX_X_HARD_CAP = new Decimal(300);
-const MAX_X_SOFTCAP_START = new Decimal(10);
-const MAX_X_SOFTCAP_POWER = 2.2;
-const MAX_X_MIN_GAIN = new Decimal(0.005);
 const MAX_OTHER_ITERATIONS = 2000;
-const MAX_PRICE = new Decimal('1e9999');
-
-const getPriceSpikeMultiplier = (level, every = 15) => {
-  const lv = Number(level || 0);
-  if (lv <= 0 || lv % every !== 0) return new Decimal(1);
-  return new Decimal(PRICE_SPIKE_FACTOR);
-};
 
 const getUpgradeCurrency = (upg) => upg.currency || (upg.type === 'ddx' ? 'DX' : 'FV');
 
@@ -38,34 +34,11 @@ const spendCurrency = (currency, amount) => {
 const getMaxXHardCap = () => {
   const piLevel = game.limit?.constants?.pi || 0;
   const piEffect = LIMIT_CONSTANTS.find(c => c.id === 'pi').getEffect(piLevel);
-  return BASE_MAX_X_HARD_CAP.plus(piEffect);
+  return getMaxXHardCapFromPiEffect(piEffect);
 };
 
 const getMaxXUpgradeGain = (currentMaxX) => {
-  const current = new Decimal(currentMaxX || 1);
-  if (current.gte(getMaxXHardCap())) return new Decimal(0);
-  if (current.lte(MAX_X_SOFTCAP_START)) return new Decimal(1);
-  const reduced = Decimal.pow(MAX_X_SOFTCAP_START.div(current), MAX_X_SOFTCAP_POWER);
-  const clampedReduced = Decimal.max(MAX_X_MIN_GAIN, reduced);
-  return Decimal.min(clampedReduced, getMaxXHardCap().minus(current));
-};
-
-const geometricBulkCost = (price, ratio, count) => {
-  if (count <= 0) return new Decimal(0);
-  if (ratio === 1) return price.times(count).ceil();
-  return price.times(Decimal.pow(ratio, count).minus(1)).div(ratio - 1).ceil();
-};
-
-const maxAffordableGeometricCount = (budget, price, ratio, cap) => {
-  if (cap <= 0 || budget.lt(price)) return 0;
-  if (ratio <= 1) return Math.min(cap, budget.div(price).floor().toNumber());
-
-  const estimate = budget.times(ratio - 1).div(price).plus(1).log10().toNumber() / Math.log10(ratio);
-  let count = Math.max(0, Math.min(cap, Math.floor(Number.isFinite(estimate) ? estimate : 0)));
-
-  while (count < cap && budget.gte(geometricBulkCost(price, ratio, count + 1))) count += 1;
-  while (count > 0 && budget.lt(geometricBulkCost(price, ratio, count))) count -= 1;
-  return count;
+  return getMaxXUpgradeGainForCap(currentMaxX, getMaxXHardCap());
 };
 
 const simulateCappedGeometricUpgrade = ({ budget, price, level, capLevel, ratio, onAfterLevel }) => {

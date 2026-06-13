@@ -1,6 +1,7 @@
 import Decimal from 'break_eternity.js';
 import { game } from '../state.js';
 import { saveGame } from '../systems/persistence.js';
+import { getExpUpgradePrice } from '../balance/formulas.js';
 
 const SAVE_KEY = 'math_idle_save';
 const DEFAULT_LIMIT = {
@@ -9,11 +10,6 @@ const DEFAULT_LIMIT = {
   limit_count: 0
 };
 
-const EXP_PRICE_BASE_MULT = 3;
-const EXP_PRICE_GROWTH = 12;
-const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
-const EXP_PRICE_SPIKE_EVERY = 5;
-const PRICE_SPIKE_FACTOR = 10;
 let runtimePatchTimer = null;
 
 const getStorage = () => {
@@ -26,24 +22,6 @@ const getTimerHost = () => {
   if (typeof window !== 'undefined') return window;
   if (typeof globalThis !== 'undefined' && globalThis.setInterval && globalThis.clearInterval) return globalThis;
   return null;
-};
-
-const getPriceSpikeMultiplier = (level, every = 15) => {
-  const lv = Number(level || 0);
-  if (lv <= 0 || lv % every !== 0) return new Decimal(1);
-  return new Decimal(PRICE_SPIKE_FACTOR);
-};
-
-const getExpUpgradePrice = (upg) => {
-  const basePrice = new Decimal(upg?.base_price || '1e10');
-  const level = Number(upg?.level || 0);
-  const scaled = basePrice
-    .times(EXP_PRICE_BASE_MULT)
-    .times(Decimal.pow(EXP_PRICE_GROWTH, level))
-    .times(getPriceSpikeMultiplier(level, EXP_PRICE_SPIKE_EVERY))
-    .floor();
-
-  return Decimal.max(MIN_EXP_REBIRTH_PRICE, scaled);
 };
 
 const normalizeLimitShape = (limit = {}) => ({

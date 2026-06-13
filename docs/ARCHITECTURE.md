@@ -14,7 +14,7 @@ one subsystem at a time with tests.
 
 ```text
 src/
-  App.vue                  Main UI shell and tab views
+  App.vue                  Main UI shell, tab navigation, lifecycle hooks
   main.js                  App startup, pow cache, save compatibility patches
   gameLogic.js             Legacy gameplay implementation and state source
   calc.js                  Legacy math facade
@@ -28,10 +28,12 @@ src/
   components/
     CustomAlert.vue        Modal alert/confirm UI
     LineChart.vue          FV/sec history chart
+    tabs/                  Focused tab panes used by App.vue
 
   game/
     index.js               Public game API for UI, scripts, and tests
     state.js               Reactive game state facade
+    balance/               Pure balance formulas and price helpers
     formatting.js          Formatting facade
     math/                  Pure math helpers
     systems/               Gameplay system modules and facades
@@ -44,6 +46,11 @@ src/
 
 - `@/game` is the only import path UI code should use for gameplay state,
   actions, data, and formatting.
+- `components/tabs/*` owns tab-specific UI and local browser integrations. The
+  root app should stay focused on shell state, alerts, tick scheduling, and save
+  lifecycle work.
+- `game/balance/*` must stay pure and deterministic. Balance code should use
+  those helpers instead of duplicating price, softcap, or hardcap formulas.
 - `game/math` must stay pure: no Vue state, DOM, localStorage, timers, or alerts.
 - `game/persistence/saveSerializer.js` owns the explicit save object shape.
   Both legacy and public save paths write through this serializer.
@@ -60,14 +67,16 @@ Completed cleanup:
 - The old Vite alias that rewired `./gameLogic.js` was removed.
 - Save writes now use explicit serialization instead of `JSON.stringify(game)`.
 - Corrupt saves are backed up to `math_idle_save_corrupt` and ignored safely.
+- Tab panes were split out of `App.vue` into `src/components/tabs/`.
+- Shared balance formulas were extracted to `src/game/balance/formulas.js` with
+  direct unit coverage.
+- The simulator supports JSON output and expected milestone windows.
 - Unused Vue starter components and icon examples were removed.
 - The unused Vue devtools plugin dependency was removed.
 
 ## Next safe PRs
 
-1. Add simulation JSON output and expected milestone windows.
-2. Add full save/load roundtrip tests for Decimal-heavy game state.
-3. Extract balance formulas from `gameLogic.js` into pure modules.
-4. Split `App.vue` tab panes into focused components.
-5. Move one `game/systems/*` facade at a time from delegation to real
+1. Add full save/load roundtrip tests for Decimal-heavy game state.
+2. Move one `game/systems/*` facade at a time from delegation to real
    implementation.
+3. Add max-buy equivalence tests against repeated single buys.

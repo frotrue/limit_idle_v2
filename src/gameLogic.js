@@ -8,14 +8,19 @@ import { AP_RESEARCH_NODES, canPurchaseResearch, getResearchBonuses, isAutoResea
 import { ACHIEVEMENTS, getAchievementFvMultiplier, getAchievementExtraAp, getAchievementStartFv } from './achievements.js';
 import { LIMIT_CONSTANTS, getLpHospitalMultiplier, getLpGain, getLpPassiveBonus, canLimit } from './tier4/limit.js';
 import { SAVE_KEY, saveSerializedGameState } from './game/persistence/saveSerializer.js';
+import {
+  EXP_PRICE_SPIKE_EVERY,
+  getExpUpgradePrice,
+  getMaxXHardCap as getMaxXHardCapFromPiEffect,
+  getMaxXUpgradeGain as getMaxXUpgradeGainForCap,
+  getPriceSpikeMultiplier,
+  getXUpgradePriceMultiplierByLevel
+} from './game/balance/formulas.js';
 
 export { SUPERSCRIPT_MAP, format, AP_RESEARCH_NODES, ACHIEVEMENTS, LIMIT_CONSTANTS, getLpHospitalMultiplier, getLpGain, getLpPassiveBonus, canLimit };
 
 const SAVE_VERSION = 3;
 const CORRUPT_SAVE_KEY = `${SAVE_KEY}_corrupt`;
-const EXP_PRICE_BASE_MULT = 3;
-const EXP_PRICE_GROWTH = 12;
-const MIN_EXP_REBIRTH_PRICE = new Decimal('1e10');
 const EXP_REBIRTH_BASE_GAIN = 0.05;
 const INTEGRAL_UNLOCK_EXP_REQ = 1.5;
 
@@ -144,17 +149,11 @@ const getTier2Bonuses = () => getTier2MilestoneBonuses(game.exp_milestone_points
 const hasAutoUpgradeUsesMaxBuy = () => !!getTier2Bonuses().autoUpgradeUsesMaxBuy;
 const START_LEVEL_CAP = 10;
 const AUTO_IDLE_BACKOFF_MAX_MS = 60000;
-const BASE_MAX_X_HARD_CAP = new Decimal(300);
 const getMaxXHardCap = () => {
   const piLevel = game.limit?.constants?.pi || 0;
   const piEffect = LIMIT_CONSTANTS.find(c => c.id === 'pi').getEffect(piLevel);
-  return BASE_MAX_X_HARD_CAP.plus(piEffect);
+  return getMaxXHardCapFromPiEffect(piEffect);
 };
-const MAX_X_SOFTCAP_START = new Decimal(10);
-const MAX_X_SOFTCAP_POWER = 2.2;
-const MAX_X_MIN_GAIN = new Decimal(0.005);
-const PRICE_SPIKE_FACTOR = 10;
-const EXP_PRICE_SPIKE_EVERY = 5;
 const MAX_BUY_SIMULATION_STEPS = 50000;
 
 let cachedTier3BonusCount = null;
@@ -166,27 +165,7 @@ let cachedIntegralEffectiveC = new Decimal(1);
 let cachedIntegralEffectiveCSquare = new Decimal(1);
 
 const getMaxXUpgradeGain = (currentMaxX) => {
-  const current = new Decimal(currentMaxX || 1);
-  if (current.gte(getMaxXHardCap())) return new Decimal(0);
-  if (current.lte(MAX_X_SOFTCAP_START)) return new Decimal(1);
-  const reduced = Decimal.pow(MAX_X_SOFTCAP_START.div(current), MAX_X_SOFTCAP_POWER);
-  const clampedReduced = Decimal.max(MAX_X_MIN_GAIN, reduced);
-  return Decimal.min(clampedReduced, getMaxXHardCap().minus(current));
-};
-
-const getPriceSpikeMultiplier = (level, every = 15) => {
-  const lv = Number(level || 0);
-  if (lv <= 0 || lv % every !== 0) return new Decimal(1);
-  return new Decimal(PRICE_SPIKE_FACTOR);
-};
-
-const getExpUpgradePrice = (upg) => {
-  const scaled = upg.base_price
-    .times(EXP_PRICE_BASE_MULT)
-    .times(Decimal.pow(EXP_PRICE_GROWTH, upg.level))
-    .times(getPriceSpikeMultiplier(upg.level, EXP_PRICE_SPIKE_EVERY))
-    .floor();
-  return Decimal.max(MIN_EXP_REBIRTH_PRICE, scaled);
+  return getMaxXUpgradeGainForCap(currentMaxX, getMaxXHardCap());
 };
 
 const getTier2StartBonuses = () => {
@@ -684,13 +663,6 @@ const getPostExpBaseGain = () => {
   }
 
   return result;
-};
-
-const getXUpgradePriceMultiplierByLevel = (level) => {
-  if (level <= 10) return 1.1;
-  if (level <= 50) return 1.2;
-  if (level <= 100) return 1.25;
-  return 1.35 + Math.floor((level - 100) / 50) * 0.1;
 };
 
 const simulateMaxXUpgradePurchase = (upg, budget, tier2) => {
