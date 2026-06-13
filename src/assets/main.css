@@ -1,35 +1,872 @@
 @import './base.css';
 
+:root {
+  --bg: #070807;
+  --surface-0: #0f1110;
+  --surface-1: #151816;
+  --surface-2: #1d211f;
+  --surface-3: #282d2a;
+  --border: #333a35;
+  --border-strong: #536158;
+  --text-strong: #f4f1e8;
+  --text: #d4d0c5;
+  --text-muted: #918d82;
+  --accent: #2f8f83;
+  --accent-strong: #3db5a6;
+  --gold: #d2a84b;
+  --danger: #c75858;
+  --success: #73ad6f;
+  --radius: 8px;
+  --radius-lg: 8px;
+  --shadow-lg: 0 18px 45px rgba(0, 0, 0, 0.45);
+}
+
+html,
+body,
 #app {
   width: 100%;
+  height: 100%;
   margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+#app,
+.app-wrapper {
+  min-height: 100%;
+}
+
+.app-wrapper {
+  background: var(--bg);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
   padding: 0;
-  font-weight: normal;
 }
 
-a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
+.container {
+  width: 100%;
+  max-width: 450px;
+  height: 100%;
+  padding: max(18px, env(safe-area-inset-top, 18px)) 14px max(18px, env(safe-area-inset-bottom, 18px));
+  background: var(--surface-0);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
 
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
+.layout-auto {
+  padding: 0;
+}
+
+@media (min-width: 900px) {
+  .layout-auto {
+    align-items: stretch;
+    padding: 0;
   }
-}
 
-@media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
-
-  #app {
+  .layout-auto .container {
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    max-height: none;
+    aspect-ratio: auto;
+    overflow: hidden;
+    padding: 10px;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 10px;
+    border: 0;
   }
+
+  .layout-auto .hud {
+    grid-column: 1;
+  }
+
+  .layout-auto .main-tabs {
+    align-self: stretch;
+    position: static;
+    flex-direction: row;
+  }
+
+  .layout-auto .main-tabs button {
+    flex-direction: row;
+    justify-content: center;
+    padding: 10px 12px;
+  }
+
+  .layout-auto .main-content {
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .layout-auto .upgrade-grid,
+  .layout-auto .research-grid,
+  .layout-auto .achievement-grid,
+  .layout-auto .stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+
+  .layout-auto .upgrade-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .layout-auto .hud {
+    padding: 12px;
+  }
+
+  .layout-auto .hud__primary,
+  .layout-auto .hud-stat {
+    padding: 12px;
+  }
+
+  .layout-auto .panel-section,
+  .layout-auto .resource-card,
+  .layout-auto .settings-panel,
+  .layout-auto .limit-reset-panel {
+    padding: 12px;
+  }
+
+  .layout-auto .tab-pane {
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1500px) {
+  .layout-auto .research-grid,
+  .layout-auto .achievement-grid,
+  .layout-auto .stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .layout-auto .upgrade-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.layout-mobile .container {
+  max-width: 450px;
+  display: flex;
+}
+
+.layout-mobile .hud {
+  grid-template-columns: 1fr;
+}
+
+.layout-mobile .hud__grid {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 360px) {
+  .container {
+    padding-left: 10px;
+    padding-right: 10px;
+    gap: 10px;
+  }
+
+  .hud,
+  .panel-section,
+  .resource-card,
+  .settings-panel,
+  .limit-reset-panel {
+    padding: 10px;
+  }
+
+  .tab-menu {
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .tab-menu button {
+    padding: 7px 2px;
+    gap: 4px;
+  }
+
+  .tab-label {
+    font-size: 0.58rem;
+  }
+}
+
+.warp-banner {
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  background: rgba(210, 168, 75, 0.1);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+}
+
+.hud {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .hud {
+    grid-template-columns: 260px 1fr;
+    align-items: stretch;
+  }
+}
+
+.hud__primary {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #101412;
+  padding: 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.hud__primary strong {
+  color: var(--text-strong);
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.hud__primary small,
+.hud-stat span,
+.resource-card__sub,
+.section-subtitle,
+.settings-row p,
+.store-card p,
+.milestone-row p,
+.research-card p,
+.limit-upgrade-card p,
+.achievement-card p {
+  color: var(--text-muted);
+}
+
+.hud__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .hud__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hud-stat {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.hud-stat strong {
+  color: var(--text-strong);
+  font-size: 0.9rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #242824;
+  overflow: hidden;
+}
+
+.progress-bar div {
+  height: 100%;
+  background: var(--accent-strong);
+}
+
+.label {
+  text-transform: uppercase;
+  letter-spacing: 0;
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.tab-menu,
+.segmented-tabs,
+.segmented-control {
+  display: flex;
+  gap: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+
+.tab-menu button,
+.segmented-tabs button,
+.segmented-control button {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.tab-menu button {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 9px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.tab-menu button.active,
+.segmented-tabs button.active,
+.segmented-control button.active {
+  background: var(--surface-3);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.tab-label {
+  font-size: 0.68rem;
+  line-height: 1.1;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .tab-label {
+    font-size: 0.58rem;
+  }
+}
+
+.main-content,
+.tab-pane,
+.systems-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.system-tabs {
+  overflow-x: auto;
+}
+
+.system-tabs button,
+.segmented-tabs button,
+.segmented-control button {
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.panel-section,
+.resource-card,
+.settings-panel,
+.limit-reset-panel {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.panel-section {
+  display: grid;
+  gap: 12px;
+}
+
+.section-header,
+.settings-panel__row,
+.research-card__footer,
+.control-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.section-header > div,
+.settings-panel__row > div,
+.control-card__header > strong,
+.research-card__header > strong,
+.upgrade-card__top > div {
+  min-width: 0;
+}
+
+.section-title {
+  color: var(--text-strong);
+  font-size: 1rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.section-subtitle {
+  margin: 3px 0 0;
+  font-size: 0.78rem;
+}
+
+.resource-card {
+  display: grid;
+  gap: 5px;
+}
+
+.resource-card__value {
+  color: var(--text-strong);
+  font-size: 1.55rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.resource-card__sub {
+  font-size: 0.82rem;
+}
+
+.resource-card__sub.accent {
+  color: var(--gold);
+}
+
+.upgrade-grid,
+.research-grid,
+.achievement-grid,
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.upgrade-grid.single {
+  grid-template-columns: 1fr;
+}
+
+.upgrade-card,
+.control-card,
+.research-card,
+.store-card,
+.limit-upgrade-card,
+.achievement-card,
+.stat-tile,
+.milestone-row {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.upgrade-card {
+  display: grid;
+  gap: 10px;
+}
+
+.upgrade-card.can-buy {
+  border-color: rgba(61, 181, 166, 0.7);
+}
+
+.upgrade-card.locked {
+  background: #141715;
+}
+
+.upgrade-card.is-maxed {
+  border-color: var(--success);
+}
+
+.upgrade-card__top,
+.upgrade-card__actions,
+.upgrade-card__meta,
+.store-card,
+.bonus-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.upgrade-card__name,
+.store-card h3,
+.milestone-row h3,
+.limit-upgrade-card h3,
+.achievement-card h3 {
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.upgrade-card__effect,
+.upgrade-card__missing,
+.milestone-row p,
+.research-card p,
+.limit-upgrade-card p,
+.achievement-card p {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.upgrade-card__level,
+.upgrade-card__currency,
+.research-card small,
+.achievement-card small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.upgrade-card__cost {
+  color: var(--gold);
+  font-weight: 800;
+}
+
+.upgrade-card__missing,
+.danger-text {
+  color: var(--danger);
+}
+
+.sub-btn,
+.buy-max-btn,
+.limit-reset-btn,
+.limit-upgrade-btn,
+.prestige-action {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.sub-btn,
+.limit-upgrade-btn {
+  padding: 11px 13px;
+  min-width: 0;
+}
+
+.sub-btn.compact,
+.buy-max-btn {
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.sub-btn.secondary {
+  background: #202521;
+}
+
+.sub-btn.active,
+.sub-btn:not(:disabled):hover,
+.buy-max-btn:hover,
+.limit-upgrade-btn:not(:disabled):hover {
+  border-color: var(--accent-strong);
+  background: rgba(47, 143, 131, 0.25);
+}
+
+.sub-btn:disabled,
+.limit-upgrade-btn:disabled,
+.prestige-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sub-btn.danger {
+  border-color: var(--danger);
+  color: #ffb1b1;
+}
+
+.sub-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: #101210;
+  color: var(--text-strong);
+}
+
+.prestige-action {
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+}
+
+.prestige-action span {
+  font-size: 1rem;
+}
+
+.prestige-action small {
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.integral-action {
+  border-color: var(--gold);
+}
+
+.settings-panel {
+  display: grid;
+  gap: 9px;
+}
+
+.settings-panel__title {
+  color: var(--text-strong);
+  font-weight: 800;
+}
+
+.settings-panel__hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  gap: 7px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.control-card {
+  display: grid;
+  gap: 10px;
+}
+
+.control-card__meta {
+  color: var(--text-muted);
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.research-card {
+  display: grid;
+  gap: 8px;
+}
+
+.research-card__header,
+.unlocked-label,
+.achievement-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.research-card.can-buy {
+  border-color: rgba(61, 181, 166, 0.65);
+}
+
+.research-card.unlocked,
+.achievement-card.unlocked {
+  border-color: rgba(115, 173, 111, 0.75);
+  background: rgba(36, 65, 40, 0.42);
+}
+
+.unlocked-label {
+  color: var(--success);
+  font-weight: 800;
+}
+
+.stat-tile {
+  display: grid;
+  gap: 5px;
+}
+
+.stat-tile span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.stat-tile strong {
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.bonus-strip {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.bonus-strip span {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  color: var(--gold);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.milestone-list {
+  display: grid;
+  gap: 8px;
+}
+
+.milestone-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.milestone-row.unlocked strong {
+  color: var(--success);
+}
+
+.milestone-row strong,
+.next-goal {
+  color: var(--gold);
+}
+
+.next-goal {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.settings-row {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-row strong {
+  color: var(--text-strong);
+}
+
+.settings-row p {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+}
+
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.limit-reset-panel {
+  display: grid;
+  gap: 9px;
+}
+
+.limit-reset-panel.ready {
+  border-color: var(--gold);
+}
+
+.limit-reset-panel h3 {
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.limit-reset-panel p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.limit-reset-panel strong,
+.limit-upgrade-card__effect {
+  color: var(--gold);
+}
+
+.limit-reset-btn {
+  padding: 13px 16px;
+  background: rgba(199, 88, 88, 0.24);
+  border-color: var(--danger);
+}
+
+.full-row {
+  grid-column: 1 / -1;
+}
+
+.upgrade-card__actions,
+.segmented-control,
+.bonus-strip,
+.store-card,
+.milestone-row,
+.upgrade-card__meta,
+.research-card__footer {
+  flex-wrap: wrap;
+}
+
+.upgrade-card__actions .sub-btn {
+  flex: 1 1 76px;
+}
+
+.segmented-control button {
+  flex: 1 1 120px;
+}
+
+.research-card__footer .sub-btn {
+  flex: 1 1 90px;
+}
+
+.milestone-row strong,
+.limit-reset-btn,
+.limit-upgrade-btn,
+.upgrade-card__cost {
+  overflow-wrap: anywhere;
+}
+
+.sub-btn,
+.buy-max-btn,
+.limit-reset-btn,
+.limit-upgrade-btn,
+.prestige-action {
+  max-width: 100%;
+}
+
+.sub-input,
+.upgrade-card__meta,
+.upgrade-card__level,
+.upgrade-card__currency,
+.upgrade-card__cost,
+.stat-tile strong,
+.resource-card__value,
+.achievement-card {
+  min-width: 0;
+}
+
+.system-tabs button,
+.segmented-tabs button {
+  flex: 0 0 auto;
+}
+
+.segmented-tabs:not(.system-tabs) button {
+  flex: 1 1 0;
+}
+
+.settings-actions .sub-btn {
+  width: 100%;
 }

@@ -1,20 +1,20 @@
 <template>
-<!-- 5. Shop 탭 -->
-          <div class="tab-pane">
-            <div class="section-title">Shop</div>
-            <div class="upgrade-grid">
-              <div class="upg-card-mini full-row" :class="{ 'locked': game.is_2x_boost_owned }">
-                <div class="upg-name">Permanent 2x Boost</div>
-                <div class="upg-desc" style="font-size: 0.8rem; color: #aaa; margin: 5px 0;">영구적으로 f(x) 생산량이 2배 증가합니다.</div>
-                <button class="sub-btn"
-                        :style="{ width: '100%', marginTop: '10px', backgroundColor: game.is_2x_boost_owned ? '#4c566a' : '#5e81ac' }"
-                        :disabled="game.is_2x_boost_owned"
-                        @click="buyPermanentBoost">
-                  {{ game.is_2x_boost_owned ? '구매 완료 (적용 중)' : '구매하기 ($0.99)' }}
-                </button>
-              </div>
-            </div>
+  <div class="tab-pane">
+    <section class="panel-section">
+      <div class="section-title">Shop</div>
+      <div class="upgrade-grid single">
+        <article class="store-card" :class="{ owned: game.is_2x_boost_owned }">
+          <div>
+            <h3>Permanent 2x Boost</h3>
+            <p>f(x) 생산량을 영구적으로 2배 증가시킵니다.</p>
           </div>
+          <button class="sub-btn" :disabled="game.is_2x_boost_owned" @click="buyPermanentBoost">
+            {{ game.is_2x_boost_owned ? '구매 완료' : '구매하기 ($0.99)' }}
+          </button>
+        </article>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -61,7 +61,7 @@ const initStore = () => {
       if (product.owned && !game.is_2x_boost_owned) {
         game.is_2x_boost_owned = true
         saveGame()
-        showAlert('영구 2배 부스트 구매가 완료(또는 복원)되었습니다!')
+        showAlert('영구 2배 부스트 구매가 완료되었거나 복원되었습니다.')
       }
     }
   })
@@ -104,10 +104,10 @@ const buyPermanentBoost = () => {
     } else if (product.owned) {
       showAlert('이미 구매한 상품입니다.')
     } else {
-      let msg = '현재 이 앱(기기)에서는 스토어가 상품을 내려주지 않고 있습니다.\n\n'
+      let msg = '현재 이 앱 또는 기기에서는 스토어가 상품 정보를 내려주지 않고 있습니다.\n\n'
       if (p1) msg += `[${p1.id}] state: ${p1.state}\n`
       if (p2) msg += `[${p2.id}] state: ${p2.state}\n`
-      msg += '\n(state가 invalid나 registered면 스토어 서버 측 거부 상태입니다. 테스트 트랙에서 다시 다운로드 해보세요.)'
+      msg += '\n테스트 트랙에서 다시 다운로드한 뒤 재시도해 주세요.'
       showAlert(msg)
       store.update()
     }

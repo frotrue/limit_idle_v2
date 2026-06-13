@@ -111,6 +111,9 @@ export const serializeGameState = (game, { now = Date.now() } = {}) => ({
   },
 
   history: serializeHistory(game.history),
+  ui: {
+    layoutMode: ['auto', 'mobile'].includes(game.ui?.layoutMode) ? game.ui.layoutMode : 'auto'
+  },
   x_upgrades: serializeUpgradeMap(game.x_upgrades),
   other_upgrades: serializeUpgradeMap(game.other_upgrades),
   exp_upgrades: serializeUpgradeMap(game.exp_upgrades),

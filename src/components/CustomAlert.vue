@@ -3,7 +3,7 @@
     <div v-if="visible" class="alert-overlay" @click.self="cancel">
       <div class="alert-card">
         <div class="alert-header">
-          <span class="alert-icon">🔔</span>
+          <Info :size="20" />
           <span class="alert-title">{{ title || '알림' }}</span>
         </div>
         <div class="alert-body">
@@ -19,7 +19,9 @@
 </template>
 
 <script setup>
-const props = defineProps({
+import { Info } from 'lucide-vue-next'
+
+defineProps({
   message: {
     type: String,
     default: ''
@@ -52,8 +54,7 @@ const cancel = () => {
 <style scoped>
 .alert-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100vw;
   height: 100vh;
   background: rgba(0, 0, 0, 0.7);
@@ -62,49 +63,46 @@ const cancel = () => {
   justify-content: center;
   align-items: center;
   z-index: 9999;
+  padding: 18px;
 }
 
 .alert-card {
-  background: #1a1a1e;
-  border: 1px solid #2a2a2e;
-  border-radius: 20px;
-  width: 90%;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
   max-width: 340px;
-  padding: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  animation: slideUp 0.3s ease-out;
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.2s ease-out;
 }
 
 .alert-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
-}
-
-.alert-icon {
-  font-size: 1.2rem;
+  margin-bottom: 14px;
+  color: var(--accent);
 }
 
 .alert-title {
-  font-weight: bold;
-  color: #5e81ac;
-  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  font-size: 1rem;
 }
 
 .alert-body {
-  color: #eee;
-  font-size: 1rem;
+  color: var(--text);
+  font-size: 0.95rem;
   line-height: 1.5;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   white-space: pre-wrap;
-  text-align: center;
 }
 
 .alert-footer {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .alert-footer.is-confirm {
@@ -112,36 +110,33 @@ const cancel = () => {
 }
 
 .alert-btn {
-  background: #5e81ac;
+  background: var(--accent);
   color: white;
   border: none;
-  padding: 12px 20px;
-  border-radius: 10px;
-  font-weight: bold;
+  padding: 11px 16px;
+  border-radius: var(--radius);
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
   flex: 1;
   font-family: inherit;
 }
 
 .alert-btn:hover {
-  background: #81a1c1;
-  transform: translateY(-2px);
+  background: var(--accent-strong);
 }
 
 .alert-btn.secondary {
-  background: #2a2a2e;
-  color: #888;
+  background: var(--surface-3);
+  color: var(--text-muted);
 }
 
 .alert-btn.secondary:hover {
-  background: #3b4252;
-  color: #fff;
+  color: var(--text-strong);
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
 
 .fade-enter-from,
@@ -151,7 +146,7 @@ const cancel = () => {
 
 @keyframes slideUp {
   from {
-    transform: translateY(20px);
+    transform: translateY(16px);
     opacity: 0;
   }
   to {

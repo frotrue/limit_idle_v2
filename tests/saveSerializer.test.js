@@ -81,6 +81,9 @@ const createMockGame = () => ({
   history: {
     fv_per_sec: Array.from({ length: 80 }, (_, i) => i)
   },
+  ui: {
+    layoutMode: 'mobile'
+  },
   x_upgrades: {
     0: { level: 2, price: new Decimal(100) }
   },
@@ -135,6 +138,12 @@ test('saveSerializedGameState writes the explicit save object', () => {
   assertDecimalEq(saved.fv, '1e10');
   assert.equal(saved.ap_research[0], 'auto_function');
   assert.equal(saved.achievements[0], 'start_1k');
+});
+
+test('serializeGameState preserves ui layout mode', () => {
+  const serialized = serializeGameState(createMockGame(), { now: 9999 });
+
+  assert.deepEqual(serialized.ui, { layoutMode: 'mobile' });
 });
 
 test('legacy saveGame writes the explicit serializer format', async () => {

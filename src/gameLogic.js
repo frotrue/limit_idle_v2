@@ -111,6 +111,9 @@ export const game = reactive({
   history: {
     fv_per_sec: []
   },
+  ui: {
+    layoutMode: 'auto'
+  },
   lastTick: Date.now()
 });
 
@@ -1207,6 +1210,11 @@ export const loadGame = () => {
   } else {
     game.history = { fv_per_sec: [] };
   }
+
+  const savedLayoutMode = data.ui?.layoutMode;
+  game.ui = {
+    layoutMode: ['auto', 'mobile'].includes(savedLayoutMode) ? savedLayoutMode : 'auto'
+  };
 
   if (loadedVersion < 2) {
     // Legacy saves had no version marker; milestone bonuses are derived from integral_count.
