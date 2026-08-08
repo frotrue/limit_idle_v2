@@ -82,3 +82,32 @@ test('public manualTick awards every completed cycle when x increase exceeds max
   assert.equal(api.game.fv.eq(12), true);
   assert.equal(api.game.stats.total_fv.eq(2), true);
 });
+
+test('integration confirm revalidates the requirement before mutating progress', async () => {
+  const api = await import('../src/game/index.js');
+  resetTickState(api);
+  api.game.unlocked_integral = true;
+  api.game.exp_multiplier = new Decimal('1.5');
+  api.game.fv = new Decimal('1e100');
+
+  let confirmCallback = null;
+  const alerts = [];
+  api.setAlertCallbacks(
+    (message, title) => alerts.push({ message, title }),
+    (_message, onConfirm) => {
+      confirmCallback = onConfirm;
+    }
+  );
+
+  assert.equal(api.integrate_bt(), true);
+  assert.equal(typeof confirmCallback, 'function');
+
+  api.game.exp_multiplier = new Decimal(1);
+  confirmCallback();
+
+  assert.equal(api.game.integral_count, 0);
+  assert.equal(api.game.integral_c.eq(0), true);
+  assert.ok(alerts.some(({ message }) => message.includes('조건이 변경')));
+
+  api.setAlertCallbacks(() => {}, () => {});
+});
