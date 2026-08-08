@@ -16,6 +16,15 @@ export const normalizeRunStartXIncrease = (game) => {
   return next;
 };
 
+export const ensureCanonicalRunStartXIncrease = (game) => {
+  if (!game) return false;
+  const minimum = getCanonicalRunStartXIncrease(game);
+  const current = new Decimal(game.x_increase || 0);
+  if (current.gte(minimum)) return false;
+  game.x_increase = minimum;
+  return true;
+};
+
 export const snapshotPrestigeCounters = (game) => ({
   differentiationCount: new Decimal(game?.differentiationCount || 0),
   expMilestonePoints: Number(game?.exp_milestone_points || 0),
