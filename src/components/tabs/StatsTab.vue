@@ -76,8 +76,14 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { LockKeyhole, Trophy } from 'lucide-vue-next'
-import { game, format, ACHIEVEMENTS } from '@/game'
-import { getAchievementFvMultiplier, getAchievementExtraAp, getAchievementStartFv } from '@/achievements.js'
+import {
+  game,
+  format,
+  ACHIEVEMENTS,
+  getAchievementFvMultiplier,
+  getAchievementExtraAp,
+  getAchievementStartFv
+} from '@/game'
 import LineChart from '@/components/LineChart.vue'
 
 const statsSubTab = ref('overview')
