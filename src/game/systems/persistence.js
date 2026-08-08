@@ -1,6 +1,7 @@
 import Decimal from 'break_eternity.js';
 import { game } from '../state.js';
 import { format } from '../formatting.js';
+import { setGameUiCallbacks, showGameAlert } from '../uiCallbacks.js';
 import { SAVE_KEY, saveSerializedGameState } from '../persistence/saveSerializer.js';
 import { simulateOfflineProgress } from './offlineProgress.js';
 import {
@@ -8,8 +9,6 @@ import {
   resetGame,
   setAlertCallbacks as legacySetAlertCallbacks
 } from '../../gameLogic.js';
-
-let showAlertFn = (message, title) => console.log(title, message);
 
 const readSerializedSave = (storage = globalThis.localStorage) => {
   if (!storage) return null;
@@ -52,7 +51,7 @@ const prepareLegacyLoad = (storage, serialized, now) => {
 const notifyOfflineProgress = (result) => {
   if (!result || result.offlineMs <= 5000) return;
   const offlineSecs = result.offlineMs / 1000;
-  const notify = () => showAlertFn(
+  const notify = () => showGameAlert(
     `방치 환영합니다!\n${offlineSecs.toFixed(0)}초 동안 ${result.steps.toLocaleString()}단계로 오프라인 진행을 계산했습니다.\n총 약 ${format(result.totalProduced)} FV 생산 (자동 기능 반영됨)`,
     '오프라인 보상'
   );
@@ -93,7 +92,7 @@ export const loadGame = () => {
 };
 
 export const setAlertCallbacks = (alertCb, confirmCb) => {
-  if (typeof alertCb === 'function') showAlertFn = alertCb;
+  setGameUiCallbacks(alertCb, confirmCb);
   legacySetAlertCallbacks(alertCb, confirmCb);
 };
 
