@@ -10,7 +10,7 @@ const resetTickState = (api) => {
   game.fx = [new Decimal(1), ...Array.from({ length: 9 }, () => new Decimal(0))];
   game.current_x = new Decimal(0);
   game.max_x = new Decimal(1);
-  game.x_increase = new Decimal(0.1);
+  game.x_increase = new Decimal(0.105);
   game.dx_points = new Decimal(0);
   game.ap_points = new Decimal(0);
   game.dx_multiplier = new Decimal(0);
@@ -108,6 +108,50 @@ test('integration confirm revalidates the requirement before mutating progress',
   assert.equal(api.game.integral_count, 0);
   assert.equal(api.game.integral_c.eq(0), true);
   assert.ok(alerts.some(({ message }) => message.includes('조건이 변경')));
+
+  api.setAlertCallbacks(() => {}, () => {});
+});
+
+test('Tier 2 reset uses the current fresh-run x increase baseline', async () => {
+  const api = await import('../src/game/index.js');
+  resetTickState(api);
+  api.game.x_increase = new Decimal('0.9');
+
+  api.performTier2Reset();
+
+  assert.equal(api.game.x_increase.eq('0.105'), true);
+});
+
+test('Tier 3 reset adds milestone x increase to the current baseline', async () => {
+  const api = await import('../src/game/index.js');
+  resetTickState(api);
+  api.game.integral_count = 1;
+  api.game.x_increase = new Decimal('0.9');
+
+  api.performTier3Reset();
+
+  assert.equal(api.game.x_increase.eq('0.135'), true);
+});
+
+test('confirmed differentiation normalizes the stale legacy reset baseline', async () => {
+  const api = await import('../src/game/index.js');
+  resetTickState(api);
+  api.game.fv = new Decimal('1e5');
+
+  let confirmCallback = null;
+  api.setAlertCallbacks(
+    () => {},
+    (_message, onConfirm) => {
+      confirmCallback = onConfirm;
+    }
+  );
+
+  api.differentiate_bt();
+  assert.equal(typeof confirmCallback, 'function');
+  confirmCallback();
+
+  assert.equal(api.game.differentiationCount.eq(1), true);
+  assert.equal(api.game.x_increase.eq('0.105'), true);
 
   api.setAlertCallbacks(() => {}, () => {});
 });
