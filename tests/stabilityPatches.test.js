@@ -92,24 +92,21 @@ test('performLimitReset immediately restores transient upgrade state', () => {
   assert.equal(expUpg.price.eq(getExpUpgradePrice(expUpg)), true);
 });
 
-test('applyRuntimeStabilityPatches installs its interval once', () => {
+test('applyRuntimeStabilityPatches is idempotent without installing a permanent poll', () => {
   const originalSetInterval = globalThis.setInterval;
-  const originalClearInterval = globalThis.clearInterval;
   let intervalCount = 0;
 
   globalThis.setInterval = () => {
     intervalCount += 1;
     return intervalCount;
   };
-  globalThis.clearInterval = () => {};
 
   try {
-    applyRuntimeStabilityPatches();
-    applyRuntimeStabilityPatches();
+    assert.equal(applyRuntimeStabilityPatches(), true);
+    assert.equal(applyRuntimeStabilityPatches(), false);
   } finally {
     globalThis.setInterval = originalSetInterval;
-    globalThis.clearInterval = originalClearInterval;
   }
 
-  assert.equal(intervalCount, 1);
+  assert.equal(intervalCount, 0);
 });
