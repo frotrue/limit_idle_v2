@@ -27,8 +27,19 @@ const readSerializedSave = (storage = globalThis.localStorage) => {
   }
 };
 
+const restoreLimitExtensionFields = (data) => {
+  if (!data?.limit || typeof data.limit !== 'object') return;
+  const reserved = new Set(['lp', 'constants', 'limit_count']);
+
+  Object.entries(data.limit).forEach(([key, value]) => {
+    if (!reserved.has(key)) game.limit[key] = value;
+  });
+};
+
 const restoreSerializedRuntimeState = (data) => {
   if (!data || typeof data !== 'object') return;
+
+  restoreLimitExtensionFields(data);
 
   if (data.stats?.fv_per_sec !== undefined) {
     game.stats.fv_per_sec = new Decimal(data.stats.fv_per_sec || 0);
