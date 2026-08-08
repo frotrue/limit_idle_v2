@@ -13,8 +13,7 @@ import {
   getTier2MilestoneTable,
   getTier3MilestoneState,
   getTier3MilestoneTable,
-  canDifferentiateNow,
-  getDifferentiationPreview
+  canDifferentiateNow
 } from '../../gameLogic.js';
 
 const suspendAutomationForBaseTick = () => {
@@ -70,7 +69,7 @@ const autoDifferentiateConditionMet = () => {
   const fvReady = game.fv.gte(new Decimal(cfg.fv_threshold || '1e20'));
   if (mode === 'fv') return fvReady;
 
-  const dxReady = getDifferentiationPreview().dxGain.gte(new Decimal(cfg.dx_threshold || '1e6'));
+  const dxReady = differentiate(game.fx, game.prestige_x).gte(new Decimal(cfg.dx_threshold || '1e6'));
   if (mode === 'dx') return dxReady;
   if (mode === 'either') return fvReady || dxReady;
   return false;
@@ -101,7 +100,13 @@ const tryAutoDifferentiate = (nowMs, completedCycle) => {
   return true;
 };
 
-export const manualTick = () => {
+export const runAutomationTick = (nowMs = Date.now(), completedCycle = true) => {
+  const differentiated = tryAutoDifferentiate(nowMs, completedCycle);
+  autoTick(nowMs);
+  return differentiated;
+};
+
+export const manualTick = (nowMs = Date.now()) => {
   const beforeCurrentX = new Decimal(game.current_x || 0);
   const beforeMaxX = new Decimal(game.max_x || 1);
   const beforeXIncrease = new Decimal(game.x_increase || 0);
@@ -119,13 +124,7 @@ export const manualTick = () => {
     xIncrease: beforeXIncrease
   });
 
-  const now = Date.now();
-  if (tryAutoDifferentiate(now, completedCycle)) {
-    autoTick(now);
-    return;
-  }
-
-  autoTick(now);
+  runAutomationTick(nowMs, completedCycle);
 };
 
 export {
