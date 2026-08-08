@@ -1,11 +1,15 @@
 import Decimal from 'break_eternity.js';
 import { game } from '../state.js';
+import { format } from '../formatting.js';
 import { SAVE_KEY, saveSerializedGameState } from '../persistence/saveSerializer.js';
+import { simulateOfflineProgress } from './offlineProgress.js';
 import {
   loadGame as legacyLoadGame,
   resetGame,
-  setAlertCallbacks
+  setAlertCallbacks as legacySetAlertCallbacks
 } from '../../gameLogic.js';
+
+let showAlertFn = (message, title) => console.log(title, message);
 
 const readSerializedSave = (storage = globalThis.localStorage) => {
   if (!storage) return null;
@@ -36,6 +40,27 @@ const restoreSerializedRuntimeState = (data) => {
   }
 };
 
+const prepareLegacyLoad = (storage, serialized, now) => {
+  if (!storage || !serialized?.lastTick) return null;
+  const startMs = Number(serialized.lastTick || 0);
+  if (!Number.isFinite(startMs) || now - startMs <= 5000) return null;
+
+  storage.setItem(SAVE_KEY, JSON.stringify({ ...serialized, lastTick: now }));
+  return { startMs };
+};
+
+const notifyOfflineProgress = (result) => {
+  if (!result || result.offlineMs <= 5000) return;
+  const offlineSecs = result.offlineMs / 1000;
+  const notify = () => showAlertFn(
+    `방치 환영합니다!\n${offlineSecs.toFixed(0)}초 동안 ${result.steps.toLocaleString()}단계로 오프라인 진행을 계산했습니다.\n총 약 ${format(result.totalProduced)} FV 생산 (자동 기능 반영됨)`,
+    '오프라인 보상'
+  );
+
+  if (typeof setTimeout === 'function') setTimeout(notify, 1000);
+  else notify();
+};
+
 export const saveGame = () => {
   game.save_version = Number(game.save_version || 1);
   game.lastTick = Date.now();
@@ -43,15 +68,35 @@ export const saveGame = () => {
 };
 
 export const loadGame = () => {
-  const serialized = readSerializedSave();
+  const storage = globalThis.localStorage;
+  const serialized = readSerializedSave(storage);
+  const now = Date.now();
+  const offline = prepareLegacyLoad(storage, serialized, now);
   const loaded = legacyLoadGame();
   if (!loaded) return false;
 
   restoreSerializedRuntimeState(serialized);
+
+  if (offline) {
+    const result = simulateOfflineProgress({
+      startMs: offline.startMs,
+      endMs: now,
+      maxSteps: 5000,
+      minStepMs: 100
+    });
+    game.lastTick = now;
+    saveSerializedGameState(game, storage, { now });
+    notifyOfflineProgress(result);
+  }
+
   return true;
 };
 
+export const setAlertCallbacks = (alertCb, confirmCb) => {
+  if (typeof alertCb === 'function') showAlertFn = alertCb;
+  legacySetAlertCallbacks(alertCb, confirmCb);
+};
+
 export {
-  resetGame,
-  setAlertCallbacks
+  resetGame
 };
