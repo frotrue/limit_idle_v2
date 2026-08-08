@@ -136,6 +136,8 @@ const activeTab = ref('fx')
 const activeSystemTab = ref('fdx')
 const isIapEnabled = import.meta.env.VITE_ENABLE_IAP === 'true'
 const ONBOARDING_STORAGE_KEY = 'limit_idle_onboarding_v1_seen'
+const EXP_UNLOCK_DX_REQUIREMENT = '1e4'
+const EXP_UNLOCK_FV_REQUIREMENT = '1e24'
 const tutorialVisible = ref(false)
 const tutorialSteps = [
   'FV는 f(x)가 만들어내는 값입니다.',
@@ -188,7 +190,9 @@ const nextGoal = computed(() => {
     if (differentiationPreview.value.canDifferentiate) return 'First Differentiation ready'
     return `First Differentiation: FV ${format(game.fv)} / ${format(DIFFERENTIATION_FV_REQUIREMENT)}`
   }
-  if (!game.unlocked_exp) return `Unlock Exponential: ${format(game.dx_points)} / 1e10 DX`
+  if (!game.unlocked_exp) {
+    return `Unlock Exponential: DX ${format(game.dx_points)} / ${format(EXP_UNLOCK_DX_REQUIREMENT)} or FV ${format(game.fv)} / ${format(EXP_UNLOCK_FV_REQUIREMENT)}`
+  }
   if (!game.unlocked_integral) return 'Reach exponent 1.50 for Integration'
   if (game.integral_count < 50) return `Limit unlock: Integral ${game.integral_count} / 50`
   if (game.limit && game.limit.limit_count <= 0) return 'Build enough FV for first LP'
