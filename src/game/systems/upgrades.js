@@ -242,7 +242,27 @@ const simulateOtherUpgradePurchase = (upg, budget) => {
   return { bought: 0, spent: new Decimal(0), nextPrice: new Decimal(upg.price), nextLevel: upg.level };
 };
 
-export const buyOtherUpgrade = legacyBuyOtherUpgrade;
+const isAutoIntervalUpgrade = (upg) => upg?.type === 'ddx' && Number(upg.id) === 3;
+const canReduceAnyAutoInterval = () => game.auto_upgrades.some((auto) => Number(auto.interval || 0) > 100);
+const markAutoIntervalUpgradeMaxed = (upg) => {
+  upg.level = 'MAX';
+  upg.price = MAX_PRICE;
+};
+
+export const buyOtherUpgrade = (upg) => {
+  if (!upg || upg.level === 'MAX') return;
+
+  if (isAutoIntervalUpgrade(upg) && !canReduceAnyAutoInterval()) {
+    markAutoIntervalUpgradeMaxed(upg);
+    return;
+  }
+
+  legacyBuyOtherUpgrade(upg);
+
+  if (isAutoIntervalUpgrade(upg) && upg.level !== 'MAX' && !canReduceAnyAutoInterval()) {
+    markAutoIntervalUpgradeMaxed(upg);
+  }
+};
 
 export const buyMaxOtherUpgrade = (upg) => {
   if (!upg || upg.level === 'MAX') return;
