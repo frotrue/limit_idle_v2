@@ -197,3 +197,24 @@ test('loadGame preserves achievements when legacy save has no limit data', async
   assert.deepEqual(game.limit.constants, { euler_e: 0, pi: 0, gamma: 0 });
   assert.equal(game.limit.limit_count, 0);
 });
+
+test('public loadGame restores serialized automation backoff and fv/sec state', async () => {
+  globalThis.localStorage = createMemoryStorage();
+  const now = Date.now();
+  const serialized = serializeGameState(createMockGame(), { now });
+  serialized.stats.fv_per_sec = '12345';
+  serialized.auto_upgrades[0].idleUntil = now + 5000;
+  serialized.auto_upgrades[0].idleStreak = 4;
+  globalThis.localStorage.setItem(SAVE_KEY, JSON.stringify(serialized));
+
+  const { game } = await import('../src/game/state.js');
+  const { loadGame } = await import('../src/game/systems/persistence.js');
+  game.stats.fv_per_sec = new Decimal(0);
+  game.auto_upgrades[0].idleUntil = 0;
+  game.auto_upgrades[0].idleStreak = 0;
+
+  assert.equal(loadGame(), true);
+  assert.equal(game.stats.fv_per_sec.eq('12345'), true);
+  assert.equal(game.auto_upgrades[0].idleUntil, now + 5000);
+  assert.equal(game.auto_upgrades[0].idleStreak, 4);
+});
