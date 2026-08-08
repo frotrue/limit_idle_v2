@@ -234,3 +234,24 @@ test('public loadGame repairs stale post-reset x increase saves', async () => {
   assert.equal(loadGame(), true);
   assert.equal(game.x_increase.eq('0.105'), true);
 });
+
+test('public loadGame restores non-core limit extension fields', async () => {
+  globalThis.localStorage = createMemoryStorage();
+  const now = Date.now();
+  const serialized = serializeGameState(createMockGame(), { now });
+  serialized.limit.future_field = 'roundtrip-value';
+  serialized.limit.warp_active = true;
+  globalThis.localStorage.setItem(SAVE_KEY, JSON.stringify(serialized));
+
+  const { game } = await import('../src/game/state.js');
+  const { loadGame } = await import('../src/game/systems/persistence.js');
+  delete game.limit.future_field;
+  delete game.limit.warp_active;
+
+  assert.equal(loadGame(), true);
+  assert.equal(game.limit.future_field, 'roundtrip-value');
+  assert.equal(game.limit.warp_active, true);
+  assert.equal(game.limit.lp.eq(serialized.limit.lp), true);
+  assert.deepEqual(game.limit.constants, serialized.limit.constants);
+  assert.equal(game.limit.limit_count, serialized.limit.limit_count);
+});
