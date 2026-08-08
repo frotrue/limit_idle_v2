@@ -1,6 +1,4 @@
 import Decimal from 'break_eternity.js';
-import { game } from '../state.js';
-import { saveGame } from '../systems/persistence.js';
 import { getExpUpgradePrice } from '../balance/formulas.js';
 
 const SAVE_KEY = 'math_idle_save';
@@ -10,17 +8,11 @@ const DEFAULT_LIMIT = {
   limit_count: 0
 };
 
-let runtimePatchTimer = null;
+let runtimePatchesApplied = false;
 
 const getStorage = () => {
   if (typeof globalThis !== 'undefined' && globalThis.localStorage) return globalThis.localStorage;
   if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
-  return null;
-};
-
-const getTimerHost = () => {
-  if (typeof window !== 'undefined') return window;
-  if (typeof globalThis !== 'undefined' && globalThis.setInterval && globalThis.clearInterval) return globalThis;
   return null;
 };
 
@@ -86,27 +78,6 @@ export const applyPreLoadSavePatches = () => {
   }
 };
 
-const normalizeRuntimeExpPrice = () => {
-  const expUpgrade = game.exp_upgrades?.[0];
-  if (!expUpgrade) return false;
-
-  const limitCount = Number(game.limit?.limit_count || 0);
-  const expLevel = Number(expUpgrade.level || 0);
-  const isPostLimitFreshExpLayer =
-    limitCount > 0 &&
-    expLevel === 0 &&
-    game.exp_x.eq(0) &&
-    game.exp_multiplier.eq(1);
-
-  if (!isPostLimitFreshExpLayer) return false;
-
-  const expected = getExpUpgradePrice(expUpgrade);
-  if (new Decimal(expUpgrade.price || 0).eq(expected)) return false;
-
-  expUpgrade.price = expected;
-  return true;
-};
-
 const applyIapProductionLogPatch = () => {
   if (typeof window === 'undefined' || import.meta.env.DEV) return;
 
@@ -126,14 +97,8 @@ const applyIapProductionLogPatch = () => {
 };
 
 export const applyRuntimeStabilityPatches = () => {
-  const timerHost = getTimerHost();
-  if (!timerHost || runtimePatchTimer !== null) return;
-
+  if (runtimePatchesApplied) return false;
+  runtimePatchesApplied = true;
   applyIapProductionLogPatch();
-
-  runtimePatchTimer = timerHost.setInterval(() => {
-    if (normalizeRuntimeExpPrice()) {
-      saveGame();
-    }
-  }, 500);
+  return true;
 };
