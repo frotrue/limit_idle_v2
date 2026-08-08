@@ -1,6 +1,10 @@
 import Decimal from 'break_eternity.js';
 import { game } from '../state.js';
 import { format } from '../formatting.js';
+import {
+  normalizeAfterPrestigeAdvance,
+  snapshotPrestigeCounters
+} from '../balance/runDefaults.js';
 import { setGameUiCallbacks, showGameAlert } from '../uiCallbacks.js';
 import { SAVE_KEY, saveSerializedGameState } from '../persistence/saveSerializer.js';
 import { simulateOfflineProgress } from './offlineProgress.js';
@@ -93,7 +97,19 @@ export const loadGame = () => {
 
 export const setAlertCallbacks = (alertCb, confirmCb) => {
   setGameUiCallbacks(alertCb, confirmCb);
-  legacySetAlertCallbacks(alertCb, confirmCb);
+
+  const wrappedConfirm = typeof confirmCb === 'function'
+    ? (message, onConfirm, title) => confirmCb(message, () => {
+        const before = snapshotPrestigeCounters(game);
+        try {
+          onConfirm();
+        } finally {
+          normalizeAfterPrestigeAdvance(before, game);
+        }
+      }, title)
+    : confirmCb;
+
+  legacySetAlertCallbacks(alertCb, wrappedConfirm);
 };
 
 export {
