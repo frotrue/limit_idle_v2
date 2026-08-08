@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import Decimal from 'break_eternity.js';
 import { game } from '../src/game/state.js';
-import { buyMaxOtherUpgrade } from '../src/game/systems/upgrades.js';
+import { buyOtherUpgrade, buyMaxOtherUpgrade } from '../src/game/systems/upgrades.js';
 
 const resetCommonState = () => {
   game.fv = new Decimal(10);
@@ -50,6 +50,39 @@ test('optimized buyMaxOtherUpgrade maxes auto interval utility', () => {
   assert.equal(upg.level, 'MAX');
   assert.equal(upg.price.toString(), '1e9999');
   assert.ok(game.auto_upgrades.every((auto) => auto.interval <= 100));
+});
+
+test('single auto interval buy never charges AP once every interval is already capped', () => {
+  resetCommonState();
+  game.ap_points = new Decimal(1000);
+  game.auto_upgrades.forEach((auto) => {
+    auto.interval = 100;
+  });
+
+  const upg = game.other_upgrades[3];
+  const beforeAp = new Decimal(game.ap_points);
+  buyOtherUpgrade(upg);
+
+  assert.equal(game.ap_points.eq(beforeAp), true);
+  assert.equal(upg.level, 'MAX');
+  assert.equal(upg.price.toString(), '1e9999');
+});
+
+test('single auto interval buy marks the upgrade MAX immediately after the final effective reduction', () => {
+  resetCommonState();
+  game.ap_points = new Decimal(1000);
+  game.auto_upgrades.forEach((auto) => {
+    auto.interval = 101;
+  });
+
+  const upg = game.other_upgrades[3];
+  const beforeAp = new Decimal(game.ap_points);
+  buyOtherUpgrade(upg);
+
+  assert.equal(game.ap_points.eq(beforeAp.minus(5)), true);
+  assert.ok(game.auto_upgrades.every((auto) => auto.interval === 100));
+  assert.equal(upg.level, 'MAX');
+  assert.equal(upg.price.toString(), '1e9999');
 });
 
 test('optimized buyMaxOtherUpgrade bulk-buys prestige x utility', () => {
