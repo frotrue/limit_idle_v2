@@ -3,13 +3,18 @@ import { game } from '../state.js';
 import { format } from '../formatting.js';
 import { showGameAlert, showGameConfirm } from '../uiCallbacks.js';
 import {
+  normalizeAfterPrestigeAdvance,
+  normalizeRunStartXIncrease,
+  snapshotPrestigeCounters
+} from '../balance/runDefaults.js';
+import {
   DIFFERENTIATION_FV_REQUIREMENT,
   canDifferentiateNow,
   getDifferentiationPreview,
-  differentiate_bt,
-  buyExpUpgrade,
-  performTier2Reset,
-  performTier3Reset,
+  differentiate_bt as legacyDifferentiateBt,
+  buyExpUpgrade as legacyBuyExpUpgrade,
+  performTier2Reset as legacyPerformTier2Reset,
+  performTier3Reset as legacyPerformTier3Reset,
   canIntegrate,
   getIntegralBonusValue
 } from '../../gameLogic.js';
@@ -20,6 +25,32 @@ const getIntegrationGain = () => {
   const logFv = Decimal.max(0, game.fv.log10());
   const gain = logFv.pow(0.7).floor();
   return gain.gte(1) ? gain : new Decimal(1);
+};
+
+export const differentiate_bt = (...args) => {
+  const before = snapshotPrestigeCounters(game);
+  const result = legacyDifferentiateBt(...args);
+  normalizeAfterPrestigeAdvance(before, game);
+  return result;
+};
+
+export const buyExpUpgrade = (...args) => {
+  const before = snapshotPrestigeCounters(game);
+  const result = legacyBuyExpUpgrade(...args);
+  normalizeAfterPrestigeAdvance(before, game);
+  return result;
+};
+
+export const performTier2Reset = (...args) => {
+  const result = legacyPerformTier2Reset(...args);
+  normalizeRunStartXIncrease(game);
+  return result;
+};
+
+export const performTier3Reset = (...args) => {
+  const result = legacyPerformTier3Reset(...args);
+  normalizeRunStartXIncrease(game);
+  return result;
 };
 
 export const integrate_bt = () => {
@@ -61,9 +92,5 @@ export {
   DIFFERENTIATION_FV_REQUIREMENT,
   canDifferentiateNow,
   getDifferentiationPreview,
-  differentiate_bt,
-  buyExpUpgrade,
-  performTier2Reset,
-  performTier3Reset,
   canIntegrate
 };
