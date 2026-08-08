@@ -2,6 +2,7 @@ import Decimal from 'break_eternity.js';
 import { game } from '../state.js';
 import { format } from '../formatting.js';
 import {
+  ensureCanonicalRunStartXIncrease,
   normalizeAfterPrestigeAdvance,
   snapshotPrestigeCounters
 } from '../balance/runDefaults.js';
@@ -43,6 +44,12 @@ const restoreSerializedRuntimeState = (data) => {
   }
 };
 
+const repairStaleRunStartBaseline = () => {
+  const xIncreaseUtility = game.other_upgrades?.[1];
+  if (!xIncreaseUtility || Number(xIncreaseUtility.level || 0) !== 0) return false;
+  return ensureCanonicalRunStartXIncrease(game);
+};
+
 const prepareLegacyLoad = (storage, serialized, now) => {
   if (!storage || !serialized?.lastTick) return null;
   const startMs = Number(serialized.lastTick || 0);
@@ -79,6 +86,7 @@ export const loadGame = () => {
   if (!loaded) return false;
 
   restoreSerializedRuntimeState(serialized);
+  repairStaleRunStartBaseline();
 
   if (offline) {
     const result = simulateOfflineProgress({
