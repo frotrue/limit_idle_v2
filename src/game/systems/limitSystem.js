@@ -1,6 +1,7 @@
 import Decimal from 'break_eternity.js';
 import { game } from '../state.js';
 import { getExpUpgradePrice } from '../balance/formulas.js';
+import { normalizeRunStartXIncrease } from '../balance/runDefaults.js';
 import { saveGame } from './persistence.js';
 import {
   LIMIT_CONSTANTS,
@@ -25,6 +26,8 @@ const restorePostLimitTransientState = () => {
     upg.level = 0;
     upg.price = getExpUpgradePrice(upg);
   });
+
+  normalizeRunStartXIncrease(game);
 };
 
 export const performLimitReset = () => {

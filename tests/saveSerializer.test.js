@@ -218,3 +218,19 @@ test('public loadGame restores serialized automation backoff and fv/sec state', 
   assert.equal(game.auto_upgrades[0].idleUntil, now + 5000);
   assert.equal(game.auto_upgrades[0].idleStreak, 4);
 });
+
+test('public loadGame repairs stale post-reset x increase saves', async () => {
+  globalThis.localStorage = createMemoryStorage();
+  const now = Date.now();
+  const serialized = serializeGameState(createMockGame(), { now });
+  serialized.x_increase = '0.05';
+  serialized.integral_count = 0;
+  serialized.other_upgrades[1] = { level: 0, price: '100' };
+  globalThis.localStorage.setItem(SAVE_KEY, JSON.stringify(serialized));
+
+  const { game } = await import('../src/game/state.js');
+  const { loadGame } = await import('../src/game/systems/persistence.js');
+
+  assert.equal(loadGame(), true);
+  assert.equal(game.x_increase.eq('0.105'), true);
+});
